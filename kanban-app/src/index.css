@@ -21,6 +21,20 @@
   --glass-border: rgba(255, 255, 255, 0.5);
   --glass-shadow: rgba(26, 26, 26, 0.08);
 
+  /* Card and form backgrounds */
+  --card-bg: rgba(255, 255, 255, 0.6);
+  --card-bg-mid: rgba(255, 255, 255, 0.3);
+  --card-bg-end: rgba(255, 255, 255, 0.45);
+  --card-border: rgba(255, 255, 255, 0.5);
+  --card-inset-light: rgba(255, 255, 255, 0.9);
+  --card-inset-dark: rgba(255, 255, 255, 0.3);
+  --input-bg: #ffffff;
+  --column-bg: rgba(255, 255, 255, 0.4);
+  --column-bg-mid: rgba(255, 255, 255, 0.15);
+  --column-bg-end: rgba(255, 255, 255, 0.25);
+  --column-header-bg: rgba(255, 255, 255, 0.3);
+  --dot-color: rgba(26, 26, 26, 0.15);
+
   /* Typography */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   line-height: 1.5;
@@ -29,6 +43,38 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+  --charcoal: #f0f0f0;
+  --cream: #121212;
+  --cream-dark: #1e1e1e;
+  --sage: #9ba89c;
+  --sage-light: #6b7a6c;
+  --sage-dark: #c5d2c6;
+  --terracotta-light: #e69a82;
+  --terracotta-dark: #ff8a65;
+  --amber-light: #f0c99a;
+
+  /* Glass effect - darker */
+  --glass-bg: rgba(30, 30, 30, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Card and form backgrounds - dark */
+  --card-bg: rgba(40, 40, 40, 0.6);
+  --card-bg-mid: rgba(50, 50, 50, 0.3);
+  --card-bg-end: rgba(45, 45, 45, 0.45);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --card-inset-light: rgba(255, 255, 255, 0.1);
+  --card-inset-dark: rgba(255, 255, 255, 0.05);
+  --input-bg: #2a2a2a;
+  --column-bg: rgba(30, 30, 30, 0.6);
+  --column-bg-mid: rgba(40, 40, 40, 0.4);
+  --column-bg-end: rgba(35, 35, 35, 0.5);
+  --column-header-bg: rgba(50, 50, 50, 0.5);
+  --dot-color: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -44,7 +90,7 @@ html, body, #root {
 
 body {
   background-color: var(--cream);
-  background-image: radial-gradient(rgba(26, 26, 26, 0.15) 1px, transparent 1px);
+  background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
   background-size: 24px 24px;
   color: var(--charcoal);
   overflow: hidden;
@@ -179,19 +225,19 @@ body::before {
   flex-direction: column;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.4) 0%,
-    rgba(255, 255, 255, 0.15) 50%,
-    rgba(255, 255, 255, 0.25) 100%
+    var(--column-bg) 0%,
+    var(--column-bg-mid) 50%,
+    var(--column-bg-end) 100%
   );
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--card-border);
   box-shadow:
-    0 8px 32px rgba(26, 26, 26, 0.08),
-    0 2px 8px rgba(26, 26, 26, 0.04),
-    inset 0 1px 1px rgba(255, 255, 255, 0.8),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.2);
+    0 8px 32px var(--glass-shadow),
+    0 2px 8px var(--glass-shadow),
+    inset 0 1px 1px var(--card-inset-light),
+    inset 0 -1px 1px var(--card-inset-dark);
   overflow: hidden;
 }
 
@@ -200,8 +246,8 @@ body::before {
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+  border-bottom: 1px solid var(--card-border);
+  background: linear-gradient(180deg, var(--column-header-bg) 0%, transparent 100%);
 }
 
 .column-title {
@@ -252,20 +298,20 @@ body::before {
 .card {
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.6) 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    rgba(255, 255, 255, 0.45) 100%
+    var(--card-bg) 0%,
+    var(--card-bg-mid) 50%,
+    var(--card-bg-end) 100%
   );
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   border-radius: 12px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--card-border);
   box-shadow:
-    0 4px 16px rgba(26, 26, 26, 0.06),
-    0 1px 4px rgba(26, 26, 26, 0.04),
-    inset 0 1px 1px rgba(255, 255, 255, 0.9),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.3);
+    0 4px 16px var(--glass-shadow),
+    0 1px 4px var(--glass-shadow),
+    inset 0 1px 1px var(--card-inset-light),
+    inset 0 -1px 1px var(--card-inset-dark);
   cursor: grab;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -303,17 +349,11 @@ body::before {
 .card:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 8px 32px rgba(26, 26, 26, 0.1),
-    0 4px 12px rgba(26, 26, 26, 0.06),
-    inset 0 1px 1px rgba(255, 255, 255, 1),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.4);
-  border-color: rgba(255, 255, 255, 0.7);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0.55) 100%
-  );
+    0 8px 32px var(--glass-shadow),
+    0 4px 12px var(--glass-shadow),
+    inset 0 1px 1px var(--card-inset-light),
+    inset 0 -1px 1px var(--card-inset-dark);
+  border-color: var(--card-border);
 }
 
 .card:active {
@@ -601,11 +641,11 @@ body::before {
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid rgba(26, 26, 26, 0.1);
+  border: 1px solid var(--card-border);
   border-radius: 10px;
   font-size: 0.9375rem;
   font-family: inherit;
-  background: white;
+  background: var(--input-bg);
   color: var(--charcoal);
   transition: all 0.15s ease;
 }
@@ -628,11 +668,11 @@ textarea.form-input {
 .form-select {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid rgba(26, 26, 26, 0.1);
+  border: 1px solid var(--card-border);
   border-radius: 10px;
   font-size: 0.9375rem;
   font-family: inherit;
-  background: white;
+  background: var(--input-bg);
   color: var(--charcoal);
   cursor: pointer;
   appearance: none;
@@ -666,12 +706,12 @@ textarea.form-input {
 
 .btn-secondary {
   background: var(--cream-dark);
-  border: 1px solid rgba(26, 26, 26, 0.08);
+  border: 1px solid var(--card-border);
   color: var(--charcoal);
 }
 
 .btn-secondary:hover {
-  background: rgba(26, 26, 26, 0.08);
+  background: var(--column-bg);
 }
 
 .btn-primary {
@@ -804,14 +844,14 @@ textarea.form-input {
   justify-content: center;
   border-radius: 10px;
   background: var(--cream-dark);
-  border: 1px solid rgba(26, 26, 26, 0.08);
+  border: 1px solid var(--card-border);
   color: var(--sage);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .refresh-btn:hover {
-  background: rgba(26, 26, 26, 0.08);
+  background: var(--column-bg);
   color: var(--charcoal);
   transform: translateY(-1px);
 }
@@ -830,14 +870,14 @@ textarea.form-input {
   justify-content: center;
   border-radius: 10px;
   background: var(--cream-dark);
-  border: 1px solid rgba(26, 26, 26, 0.08);
+  border: 1px solid var(--card-border);
   color: var(--sage);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .settings-btn:hover {
-  background: rgba(26, 26, 26, 0.08);
+  background: var(--column-bg);
   color: var(--charcoal);
   transform: translateY(-1px);
 }
@@ -858,6 +898,48 @@ textarea.form-input {
   height: 8px;
   background: var(--terracotta);
   border-radius: 50%;
+}
+
+/* Theme selector (segmented control) */
+.theme-selector {
+  display: flex;
+  background: var(--cream-dark);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.theme-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--sage);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-option:hover {
+  color: var(--charcoal);
+}
+
+.theme-option.active {
+  background: var(--input-bg);
+  color: var(--charcoal);
+  box-shadow: 0 1px 3px var(--glass-shadow);
+}
+
+.theme-option svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Form helper text */
