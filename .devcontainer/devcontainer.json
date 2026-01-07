@@ -11,7 +11,11 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "forwardPorts": [3000, 8083],
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y tmux fontconfig unzip && mkdir -p ~/.local/share/fonts && curl -fLo /tmp/JetBrainsMono.zip https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip && unzip -o /tmp/JetBrainsMono.zip -d ~/.local/share/fonts && fc-cache -fv && cd kanban-app && npm install && npm install -g @anthropic-ai/claude-code",
+  "containerEnv": {
+    "TERM": "xterm-256color",
+    "LANG": "en_US.UTF-8"
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y tmux && cd kanban-app && npm install && npm install -g @anthropic-ai/claude-code",
   "customizations": {
     "vscode": {
       "extensions": [
