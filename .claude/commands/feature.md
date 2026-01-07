@@ -1,45 +1,34 @@
 ---
-description: Create a GitHub feature request or bug report by interviewing you
+description: Create a GitHub feature request by interviewing you
 allowed-tools: Bash(gh issue create:*), Bash(gh issue list:*), Bash(gh repo view:*), AskUserQuestion, Read
 ---
 
-# GitHub Issue Creator
+# GitHub Feature Request Creator
 
-You are helping the user create a GitHub issue for the Antler project. Interview them to gather the necessary information, then create the issue using the `gh` CLI.
+You are helping the user create a GitHub feature request for the Antler project. Interview them to gather the necessary information, then create the issue using the `gh` CLI.
 
-## Step 1: Determine Issue Type
+## Interview Questions
 
-First, ask the user what type of issue they want to create:
-- **Feature Request**: A new feature or enhancement
-- **Bug Report**: Something isn't working correctly
+Ask the user about each of these in a conversational way:
 
-## Step 2: Interview Based on Type
+1. **Problem**: Is this feature request related to a problem? What frustrates you?
+2. **Solution**: Describe the solution you'd like. What do you want to happen?
+3. **Alternatives**: Have you considered any alternative solutions or features?
+4. **Additional Context**: Any other details, mockups, screenshots, or references?
 
-### For Feature Requests, ask about:
-1. **Problem**: What problem is this related to? What frustrates you?
-2. **Solution**: What do you want to happen? Be specific.
-3. **Alternatives**: Have you considered any other approaches?
-4. **Additional Context**: Any other details, mockups, or references?
-
-### For Bug Reports, ask about:
-1. **Bug Description**: What's happening that shouldn't be?
-2. **Steps to Reproduce**: Exact steps to trigger the bug
-3. **Expected Behavior**: What should happen instead?
-4. **Environment**: OS, browser, versions if relevant
-5. **Additional Context**: Error messages, screenshots, logs?
-
-## Step 3: Compose and Create
+## Creating the Issue
 
 After gathering info:
 1. Show the user a preview of the issue title and body
 2. Ask for confirmation or edits
-3. Create the issue using: `gh issue create --title "TITLE" --body "BODY" --repo chezu/Antler`
-4. For feature requests, add the label: `--label "feature"`
-5. For bug reports, add the label: `--label "bug"`
+3. Create the issue using:
+   ```
+   gh issue create --title "TITLE" --body "BODY" --label "feature"
+   ```
 
-## Templates Reference
+## Body Template
 
-Feature request body format:
+Format the issue body like this:
 ```
 **Is your feature request related to a problem? Please describe.**
 [Problem description]
@@ -49,28 +38,6 @@ Feature request body format:
 
 **Describe alternatives you've considered**
 [Alternatives]
-
-**Additional context**
-[Any other context]
-```
-
-Bug report body format:
-```
-**Describe the bug**
-[Bug description]
-
-**To Reproduce**
-Steps to reproduce the behavior:
-1. [Step 1]
-2. [Step 2]
-...
-
-**Expected behavior**
-[Expected behavior]
-
-**Environment**
-- OS: [e.g., macOS 14]
-- Browser: [e.g., Chrome 120]
 
 **Additional context**
 [Any other context]
