@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/chezu/antler/backend/config"
 )
@@ -58,14 +59,18 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 		s.Status = StatusStarting
 	})
 
+	log.Printf("   🔧 Creating git worktree for issue #%d...", issue.Number)
 	branch, worktreePath, err := o.worktrees.CreateWorktree(ctx, issue.Number, issue.Title)
 	if err != nil {
+		log.Printf("   ❌ Worktree creation failed: %v", err)
 		o.sessions.Update(issue.Number, func(s *Session) {
 			s.Status = StatusError
 			s.Error = fmt.Sprintf("worktree creation failed: %v", err)
 		})
 		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}
+	log.Printf("   ✓ Worktree created: %s", worktreePath)
+	log.Printf("   ✓ Branch: %s", branch)
 
 	o.sessions.Update(issue.Number, func(s *Session) {
 		s.Branch = branch
@@ -73,23 +78,29 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 	})
 
 	// Step 2: Verify devcontainer.json exists (REQUIRED)
+	log.Printf("   🔍 Checking for devcontainer.json...")
 	if !o.devcontainer.HasDevcontainerConfig(worktreePath) {
+		log.Printf("   ❌ No .devcontainer/devcontainer.json found")
 		o.sessions.Update(issue.Number, func(s *Session) {
 			s.Status = StatusError
 			s.Error = "no .devcontainer/devcontainer.json found in target project"
 		})
 		return nil, fmt.Errorf("devcontainer.json is required but not found in %s", worktreePath)
 	}
+	log.Printf("   ✓ devcontainer.json found")
 
 	// Step 3: Start dev container
+	log.Printf("   🐳 Starting dev container...")
 	containerID, err := o.devcontainer.StartDevContainer(ctx, worktreePath)
 	if err != nil {
+		log.Printf("   ❌ Dev container failed: %v", err)
 		o.sessions.Update(issue.Number, func(s *Session) {
 			s.Status = StatusError
 			s.Error = fmt.Sprintf("devcontainer start failed: %v", err)
 		})
 		return nil, fmt.Errorf("failed to start dev container: %w", err)
 	}
+	log.Printf("   ✓ Container started: %s", containerID[:12])
 
 	o.sessions.Update(issue.Number, func(s *Session) {
 		s.ContainerID = containerID
@@ -97,7 +108,9 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 
 	// Step 4: Create tmux session
 	tmuxSessionName := GenerateSessionName(issue.Number)
+	log.Printf("   📺 Creating tmux session: %s", tmuxSessionName)
 	if err := o.tmux.CreateSession(ctx, tmuxSessionName, worktreePath); err != nil {
+		log.Printf("   ❌ Tmux session failed: %v", err)
 		// Cleanup container on failure
 		o.devcontainer.StopDevContainer(ctx, containerID)
 		o.sessions.Update(issue.Number, func(s *Session) {
@@ -106,13 +119,16 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 		})
 		return nil, fmt.Errorf("failed to create tmux session: %w", err)
 	}
+	log.Printf("   ✓ Tmux session created")
 
 	o.sessions.Update(issue.Number, func(s *Session) {
 		s.TmuxSession = tmuxSessionName
 	})
 
 	// Step 5: Launch Claude Code
+	log.Printf("   🤖 Launching Claude Code...")
 	if err := o.claude.StartClaudeCode(ctx, o.tmux, tmuxSessionName, worktreePath, issue); err != nil {
+		log.Printf("   ❌ Claude Code failed: %v", err)
 		// Cleanup on failure
 		o.tmux.KillSession(ctx, tmuxSessionName)
 		o.devcontainer.StopDevContainer(ctx, containerID)
@@ -122,6 +138,7 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 		})
 		return nil, fmt.Errorf("failed to start Claude Code: %w", err)
 	}
+	log.Printf("   ✓ Claude Code launched")
 
 	// Mark session as running
 	o.sessions.Update(issue.Number, func(s *Session) {
@@ -135,6 +152,7 @@ func (o *Orchestrator) StartDevSession(ctx context.Context, issue *IssueContext)
 func (o *Orchestrator) StopDevSession(ctx context.Context, issueNumber int) error {
 	session := o.sessions.Get(issueNumber)
 	if session == nil {
+		log.Printf("   ℹ️  No active session found for issue #%d", issueNumber)
 		return nil // No session to stop
 	}
 
@@ -146,22 +164,34 @@ func (o *Orchestrator) StopDevSession(ctx context.Context, issueNumber int) erro
 
 	// Step 1: Kill tmux session (this stops Claude Code)
 	if session.TmuxSession != "" {
+		log.Printf("   📺 Killing tmux session: %s", session.TmuxSession)
 		if err := o.tmux.KillSession(ctx, session.TmuxSession); err != nil {
+			log.Printf("   ⚠️  Tmux cleanup warning: %v", err)
 			errors = append(errors, fmt.Errorf("tmux: %w", err))
+		} else {
+			log.Printf("   ✓ Tmux session killed")
 		}
 	}
 
 	// Step 2: Stop dev container
 	if session.ContainerID != "" {
+		log.Printf("   🐳 Stopping container: %s", session.ContainerID[:12])
 		if err := o.devcontainer.StopDevContainer(ctx, session.ContainerID); err != nil {
+			log.Printf("   ⚠️  Container cleanup warning: %v", err)
 			errors = append(errors, fmt.Errorf("container: %w", err))
+		} else {
+			log.Printf("   ✓ Container stopped")
 		}
 	}
 
 	// Step 3: Optionally remove worktree
 	if o.config.CleanupWorktreeOnStop && session.WorktreePath != "" {
+		log.Printf("   🔧 Removing worktree: %s", session.WorktreePath)
 		if err := o.worktrees.RemoveWorktree(ctx, session.WorktreePath); err != nil {
+			log.Printf("   ⚠️  Worktree cleanup warning: %v", err)
 			errors = append(errors, fmt.Errorf("worktree: %w", err))
+		} else {
+			log.Printf("   ✓ Worktree removed")
 		}
 	}
 

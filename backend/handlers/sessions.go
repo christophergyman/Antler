@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -84,15 +85,20 @@ func (h *SessionsHandler) handleLabels(w http.ResponseWriter, r *http.Request, i
 
 	var req UpdateLabelsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("❌ Invalid request body for label update")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("📝 Issue #%d: Updating labels +%v -%v", issueNumber, req.Add, req.Remove)
+
 	if err := h.GitHubClient.UpdateLabels(issueNumber, req.Add, req.Remove); err != nil {
+		log.Printf("❌ Issue #%d: Failed to update labels: %v", issueNumber, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("✅ Issue #%d: Labels updated successfully", issueNumber)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -110,17 +116,23 @@ func (h *SessionsHandler) handleStartDev(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	log.Printf("🚀 Issue #%d: Starting dev session...", issueNumber)
+
 	if h.Orchestrator == nil || !h.Orchestrator.IsConfigured() {
+		log.Printf("❌ Issue #%d: Orchestrator not configured", issueNumber)
 		http.Error(w, "Orchestrator not configured. Set orchestrator.project_path in config.", http.StatusServiceUnavailable)
 		return
 	}
 
 	// Fetch issue from GitHub to get context
+	log.Printf("   Fetching issue details from GitHub...")
 	issue, err := h.GitHubClient.GetIssue(issueNumber)
 	if err != nil {
+		log.Printf("❌ Issue #%d: Failed to fetch from GitHub: %v", issueNumber, err)
 		http.Error(w, "Failed to fetch issue: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("   Issue: %s", issue.Title)
 
 	// Parse issue body for context
 	problem, solution, alternatives, additionalContext := parseBody(issue.Body)
@@ -148,12 +160,14 @@ func (h *SessionsHandler) handleStartDev(w http.ResponseWriter, r *http.Request,
 	// Start the dev session
 	session, err := h.Orchestrator.StartDevSession(r.Context(), issueCtx)
 	if err != nil {
+		log.Printf("❌ Issue #%d: Failed to start dev session: %v", issueNumber, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(SessionResponse{Error: err.Error()})
 		return
 	}
 
+	log.Printf("✅ Issue #%d: Dev session started successfully", issueNumber)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SessionResponse{Session: session})
 }
@@ -165,18 +179,23 @@ func (h *SessionsHandler) handleStopDev(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	log.Printf("🛑 Issue #%d: Stopping dev session...", issueNumber)
+
 	if h.Orchestrator == nil {
+		log.Printf("❌ Issue #%d: Orchestrator not configured", issueNumber)
 		http.Error(w, "Orchestrator not configured", http.StatusServiceUnavailable)
 		return
 	}
 
 	if err := h.Orchestrator.StopDevSession(r.Context(), issueNumber); err != nil {
+		log.Printf("❌ Issue #%d: Failed to stop dev session: %v", issueNumber, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(SessionResponse{Error: err.Error()})
 		return
 	}
 
+	log.Printf("✅ Issue #%d: Dev session stopped", issueNumber)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
