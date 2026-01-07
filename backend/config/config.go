@@ -8,10 +8,17 @@ import (
 
 type Config struct {
 	GitHub GitHubConfig `yaml:"github"`
+	Server ServerConfig `yaml:"server"`
 }
 
 type GitHubConfig struct {
 	Repository string `yaml:"repository"`
+}
+
+type ServerConfig struct {
+	Host         string `yaml:"host"`
+	BackendPort  int    `yaml:"backend_port"`
+	FrontendPort int    `yaml:"frontend_port"`
 }
 
 func Load(path string) (*Config, error) {

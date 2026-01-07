@@ -28,14 +28,14 @@ Antler is a self-hostable Kanban board for managing multi-agent workflows. It di
 
 ### Build and Run Everything
 ```bash
-./build.sh  # Builds backend, starts both services (frontend :3000, backend :8082)
+./build.sh  # Builds backend, starts both services (frontend :3000, backend :8083)
 ```
 
 ### Backend Only
 ```bash
 cd backend
 go build -o ../antler-backend .
-PORT=8082 ../antler-backend
+PORT=8083 ../antler-backend
 ```
 
 ### Frontend Only

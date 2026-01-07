@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/chezu/antler/backend/config"
 	"github.com/chezu/antler/backend/github"
@@ -60,13 +62,36 @@ func main() {
 		fmt.Fprint(w, "OK")
 	})
 
+	// Config endpoint for frontend
+	http.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"host":          cfg.Server.Host,
+			"backend_port":  cfg.Server.BackendPort,
+			"frontend_port": cfg.Server.FrontendPort,
+		})
+	})
+
+	// Determine port: env var > config > default
 	port := os.Getenv("PORT")
+	if port == "" && cfg.Server.BackendPort > 0 {
+		port = strconv.Itoa(cfg.Server.BackendPort)
+	}
 	if port == "" {
-		port = "8082"
+		port = "8083"
 	}
 	port = ":" + port
 	log.Printf("Starting server on %s", port)
-	log.Printf("API endpoint: http://localhost%s/api/issues", port)
+	log.Printf("API endpoint: http://%s%s/api/issues", cfg.Server.Host, port)
 
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)

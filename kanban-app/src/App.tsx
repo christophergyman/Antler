@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './index.css';
 
-const API_URL = 'http://localhost:8082';
+// API_URL is empty to use relative URLs - Vite proxy handles /api requests
+const API_URL = '';
 
 // Types
 interface Task {
