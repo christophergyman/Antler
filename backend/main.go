@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/chezu/antler/backend/config"
 	"github.com/chezu/antler/backend/github"
 	"github.com/chezu/antler/backend/handlers"
+	"github.com/chezu/antler/backend/orchestrator"
 )
 
 // repoPattern validates "owner/repo" format
@@ -65,12 +67,53 @@ func main() {
 	ghClient := github.NewClient(cfg.GitHub.Repository)
 	issuesHandler := handlers.NewIssuesHandler(ghClient, cfg.GitHub.ClosedIssueLimit)
 
+	// Initialize orchestrator if configured
+	var orch *orchestrator.Orchestrator
+	if cfg.Orchestrator.ProjectPath != "" {
+		orch = orchestrator.New(&cfg.Orchestrator)
+		log.Printf("Orchestrator enabled: project_path=%s, worktree_base=%s",
+			cfg.Orchestrator.ProjectPath, cfg.Orchestrator.WorktreeBase)
+	} else {
+		log.Printf("Orchestrator not configured (set orchestrator.project_path in config to enable)")
+	}
+
+	// Create sessions handler
+	sessionsHandler := handlers.NewSessionsHandler(orch, ghClient)
+
 	// Setup routes - use wrapper to always use current handler
 	http.HandleFunc("/api/issues", func(w http.ResponseWriter, r *http.Request) {
 		mu.RLock()
 		handler := issuesHandler
 		mu.RUnlock()
 		handler.ServeHTTP(w, r)
+	})
+
+	// Session management routes
+	http.HandleFunc("/api/issues/", func(w http.ResponseWriter, r *http.Request) {
+		// Handle /api/issues/:number/* routes
+		path := strings.TrimPrefix(r.URL.Path, "/api/issues/")
+		if path != "" && path != r.URL.Path {
+			mu.RLock()
+			handler := sessionsHandler
+			mu.RUnlock()
+			handler.HandleIssueRoutes(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	http.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
+		mu.RLock()
+		handler := sessionsHandler
+		mu.RUnlock()
+		handler.ListSessionsHandler(w, r)
+	})
+
+	http.HandleFunc("/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		mu.RLock()
+		handler := sessionsHandler
+		mu.RUnlock()
+		handler.GetSessionHandler(w, r)
 	})
 
 	// Health check endpoint

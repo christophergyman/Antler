@@ -9,8 +9,17 @@ import (
 )
 
 type Config struct {
-	GitHub GitHubConfig `yaml:"github"`
-	Server ServerConfig `yaml:"server"`
+	GitHub       GitHubConfig       `yaml:"github"`
+	Server       ServerConfig       `yaml:"server"`
+	Orchestrator OrchestratorConfig `yaml:"orchestrator"`
+}
+
+type OrchestratorConfig struct {
+	ProjectPath           string `yaml:"project_path"`             // Required: target repo path
+	WorktreeBase          string `yaml:"worktree_base"`            // Default: ../antler-worktrees
+	DevcontainerEnabled   bool   `yaml:"devcontainer_enabled"`     // Default: true
+	ClaudeCodePath        string `yaml:"claude_code_path"`         // Default: "claude"
+	CleanupWorktreeOnStop bool   `yaml:"cleanup_worktree_on_stop"` // Default: false
 }
 
 type GitHubConfig struct {
@@ -35,7 +44,17 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	cfg.applyDefaults()
 	return &cfg, nil
+}
+
+func (c *Config) applyDefaults() {
+	if c.Orchestrator.WorktreeBase == "" {
+		c.Orchestrator.WorktreeBase = "../antler-worktrees"
+	}
+	if c.Orchestrator.ClaudeCodePath == "" {
+		c.Orchestrator.ClaudeCodePath = "claude"
+	}
 }
 
 func Save(path string, cfg *Config) error {

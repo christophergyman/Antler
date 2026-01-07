@@ -37,6 +37,13 @@ interface ApiResponse {
 
 type Theme = 'light' | 'dark' | 'system';
 
+interface ErrorModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onRetry?: () => void;
+}
+
 // Icons
 const PlusIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -129,6 +136,54 @@ const SunIcon = () => (
     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
   </svg>
 );
+
+// API functions for session management
+async function updateIssueLabels(
+  issueNumber: string,
+  addLabels: string[],
+  removeLabels: string[]
+): Promise<void> {
+  const response = await fetch(`${API_URL}/api/issues/${issueNumber}/labels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ add: addLabels, remove: removeLabels }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Failed to update labels');
+  }
+}
+
+async function startDevSession(issueNumber: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/issues/${issueNumber}/start-dev`, {
+    method: 'POST',
+  });
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    throw new Error(data.error || 'Failed to start dev session');
+  }
+}
+
+async function stopDevSession(issueNumber: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/issues/${issueNumber}/stop-dev`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to stop dev session');
+  }
+}
+
+// Map column IDs to GitHub labels
+function columnToLabel(columnId: string): string {
+  const mapping: Record<string, string> = {
+    feature: 'feature',
+    development: 'development',
+    'test-merge': 'test/merge',
+    done: 'done',
+  };
+  return mapping[columnId] || columnId;
+}
 
 // Drop indicator component
 function DropIndicator({ isVisible }: { isVisible: boolean }) {
@@ -791,6 +846,59 @@ function SettingsModal({
   );
 }
 
+// Error modal for session errors
+function ErrorModal({
+  state,
+  onClose,
+}: {
+  state: ErrorModalState;
+  onClose: () => void;
+}) {
+  if (!state.isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="modal delete-modal"
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="delete-modal-icon" style={{ background: 'var(--color-error)' }}>
+            <CloseIcon />
+          </div>
+          <h2 className="delete-modal-title">{state.title}</h2>
+          <p className="delete-modal-text">{state.message}</p>
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            {state.onRetry && (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  state.onRetry?.();
+                  onClose();
+                }}
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // Loading spinner component
 function LoadingSpinner() {
   return (
@@ -833,6 +941,11 @@ function App() {
     const saved = localStorage.getItem('theme') as Theme | null;
     if (saved && ['light', 'dark', 'system'].includes(saved)) return saved;
     return 'system';
+  });
+  const [errorModal, setErrorModal] = useState<ErrorModalState>({
+    isOpen: false,
+    title: '',
+    message: '',
   });
 
   // Apply theme to document
@@ -920,49 +1033,55 @@ function App() {
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       const taskId = e.dataTransfer.getData('text/plain');
 
       if (!taskId || !dropTarget) return;
 
+      // Find the task and its source column
+      let task: Task | undefined;
+      let sourceColumnId: string | undefined;
+      let sourceIndex: number = -1;
+
+      for (const column of columns) {
+        const foundIndex = column.tasks.findIndex((t) => t.id === taskId);
+        if (foundIndex !== -1) {
+          task = column.tasks[foundIndex];
+          sourceColumnId = column.id;
+          sourceIndex = foundIndex;
+          break;
+        }
+      }
+
+      if (!task || !sourceColumnId) {
+        setDraggedTaskId(null);
+        setDropTarget(null);
+        return;
+      }
+
+      // If dropping in the same column at the same position or adjacent, no change needed
+      if (sourceColumnId === dropTarget.columnId) {
+        if (sourceIndex === dropTarget.index || sourceIndex === dropTarget.index - 1) {
+          setDraggedTaskId(null);
+          setDropTarget(null);
+          return;
+        }
+      }
+
+      // Calculate the actual insert index
+      let insertIndex = dropTarget.index;
+      if (sourceColumnId === dropTarget.columnId && sourceIndex < dropTarget.index) {
+        insertIndex -= 1;
+      }
+
+      const targetColumnId = dropTarget.columnId;
+      const columnChanged = sourceColumnId !== targetColumnId;
+
+      // Update local state first (optimistic update)
       setColumns((prevColumns) => {
-        // Find the task and its source column
-        let task: Task | undefined;
-        let sourceColumnId: string | undefined;
-        let sourceIndex: number = -1;
-
-        for (const column of prevColumns) {
-          const foundIndex = column.tasks.findIndex((t) => t.id === taskId);
-          if (foundIndex !== -1) {
-            task = column.tasks[foundIndex];
-            sourceColumnId = column.id;
-            sourceIndex = foundIndex;
-            break;
-          }
-        }
-
-        if (!task || !sourceColumnId) {
-          return prevColumns;
-        }
-
-        // If dropping in the same column at the same position or adjacent, no change needed
-        if (sourceColumnId === dropTarget.columnId) {
-          if (sourceIndex === dropTarget.index || sourceIndex === dropTarget.index - 1) {
-            return prevColumns;
-          }
-        }
-
-        // Calculate the actual insert index
-        let insertIndex = dropTarget.index;
-        if (sourceColumnId === dropTarget.columnId && sourceIndex < dropTarget.index) {
-          insertIndex -= 1;
-        }
-
-        // Move the task
         return prevColumns.map((column) => {
-          if (column.id === sourceColumnId && column.id === dropTarget.columnId) {
-            // Moving within the same column
+          if (column.id === sourceColumnId && column.id === targetColumnId) {
             const newTasks = column.tasks.filter((t) => t.id !== taskId);
             newTasks.splice(insertIndex, 0, task!);
             return { ...column, tasks: newTasks };
@@ -973,7 +1092,7 @@ function App() {
               tasks: column.tasks.filter((t) => t.id !== taskId),
             };
           }
-          if (column.id === dropTarget.columnId) {
+          if (column.id === targetColumnId) {
             const newTasks = [...column.tasks];
             newTasks.splice(insertIndex, 0, task!);
             return { ...column, tasks: newTasks };
@@ -984,8 +1103,88 @@ function App() {
 
       setDraggedTaskId(null);
       setDropTarget(null);
+
+      // Persist column change to backend
+      if (columnChanged) {
+        const revertMove = () => {
+          setColumns((prevColumns) => {
+            return prevColumns.map((column) => {
+              if (column.id === targetColumnId) {
+                return {
+                  ...column,
+                  tasks: column.tasks.filter((t) => t.id !== taskId),
+                };
+              }
+              if (column.id === sourceColumnId) {
+                const newTasks = [...column.tasks];
+                newTasks.splice(sourceIndex, 0, task!);
+                return { ...column, tasks: newTasks };
+              }
+              return column;
+            });
+          });
+        };
+
+        try {
+          // Update GitHub labels
+          const sourceLabel = columnToLabel(sourceColumnId);
+          const targetLabel = columnToLabel(targetColumnId);
+          await updateIssueLabels(taskId, [targetLabel], [sourceLabel]);
+
+          // Special handling: Feature → Development (start dev session)
+          if (sourceColumnId === 'feature' && targetColumnId === 'development') {
+            try {
+              await startDevSession(taskId);
+            } catch (err) {
+              setErrorModal({
+                isOpen: true,
+                title: 'Failed to Start Dev Session',
+                message: err instanceof Error ? err.message : 'Unknown error',
+                onRetry: async () => {
+                  try {
+                    await startDevSession(taskId);
+                  } catch (retryErr) {
+                    setErrorModal({
+                      isOpen: true,
+                      title: 'Failed to Start Dev Session',
+                      message: retryErr instanceof Error ? retryErr.message : 'Unknown error',
+                    });
+                  }
+                },
+              });
+            }
+          }
+
+          // Special handling: Development → any other column (stop dev session)
+          if (sourceColumnId === 'development' && targetColumnId !== 'development') {
+            try {
+              await stopDevSession(taskId);
+            } catch (err) {
+              console.error('Failed to stop dev session:', err);
+              // Don't show error modal for stop failures, just log
+            }
+          }
+        } catch (err) {
+          // Revert the move on label update failure
+          revertMove();
+          setErrorModal({
+            isOpen: true,
+            title: 'Failed to Update Labels',
+            message: err instanceof Error ? err.message : 'Unknown error',
+            onRetry: () => {
+              // Re-attempt the drop
+              const syntheticEvent = {
+                preventDefault: () => {},
+                dataTransfer: { getData: () => taskId },
+              } as unknown as React.DragEvent;
+              setDropTarget({ columnId: targetColumnId, index: insertIndex });
+              setTimeout(() => handleDrop(syntheticEvent), 0);
+            },
+          });
+        }
+      }
     },
-    [dropTarget]
+    [dropTarget, columns]
   );
 
   const handleDragEnd = useCallback(() => {
@@ -1144,6 +1343,11 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleSettingsSave}
         onThemeChange={handleThemeChange}
+      />
+
+      <ErrorModal
+        state={errorModal}
+        onClose={() => setErrorModal({ isOpen: false, title: '', message: '' })}
       />
     </div>
   );

@@ -117,3 +117,79 @@ func GetPrimaryLabel(issue Issue) string {
 	}
 	return "feature"
 }
+
+// GetIssue fetches a single issue by number.
+func (c *Client) GetIssue(issueNumber int) (*Issue, error) {
+	cmd := exec.Command("gh", "issue", "view",
+		fmt.Sprintf("%d", issueNumber),
+		"--repo", c.Repository,
+		"--json", "number,title,body,labels,assignees,milestone,state",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("gh command failed: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("failed to run gh command: %w", err)
+	}
+
+	var issue Issue
+	if err := json.Unmarshal(output, &issue); err != nil {
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	return &issue, nil
+}
+
+// AddLabel adds a label to an issue.
+func (c *Client) AddLabel(issueNumber int, label string) error {
+	cmd := exec.Command("gh", "issue", "edit",
+		fmt.Sprintf("%d", issueNumber),
+		"--repo", c.Repository,
+		"--add-label", label,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to add label: %s", string(output))
+	}
+
+	return nil
+}
+
+// RemoveLabel removes a label from an issue.
+func (c *Client) RemoveLabel(issueNumber int, label string) error {
+	cmd := exec.Command("gh", "issue", "edit",
+		fmt.Sprintf("%d", issueNumber),
+		"--repo", c.Repository,
+		"--remove-label", label,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove label: %s", string(output))
+	}
+
+	return nil
+}
+
+// UpdateLabels updates an issue's labels by adding and removing specified labels.
+func (c *Client) UpdateLabels(issueNumber int, addLabels, removeLabels []string) error {
+	args := []string{"issue", "edit", fmt.Sprintf("%d", issueNumber), "--repo", c.Repository}
+
+	for _, label := range addLabels {
+		args = append(args, "--add-label", label)
+	}
+	for _, label := range removeLabels {
+		args = append(args, "--remove-label", label)
+	}
+
+	cmd := exec.Command("gh", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to update labels: %s", string(output))
+	}
+
+	return nil
+}
