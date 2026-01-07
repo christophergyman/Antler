@@ -15,7 +15,7 @@
     "TERM": "xterm-256color",
     "LANG": "en_US.UTF-8"
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y tmux && cd kanban-app && npm install && npm install -g @anthropic-ai/claude-code",
+  "postCreateCommand": "sudo locale-gen en_US.UTF-8 && sudo apt-get update && sudo apt-get install -y tmux && cd kanban-app && npm install && npm install -g @anthropic-ai/claude-code",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -24,5 +24,6 @@
         "esbenp.prettier-vscode"
       ]
     }
-  }
+  },
+  "remoteUser": "vscode"
 }
