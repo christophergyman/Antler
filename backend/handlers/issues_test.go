@@ -240,7 +240,7 @@ func TestIssueToTask_NoMilestone(t *testing.T) {
 }
 
 func TestIssuesHandler_OPTIONS(t *testing.T) {
-	handler := NewIssuesHandler(&github.Client{Repository: "test/repo"})
+	handler := NewIssuesHandler(&github.Client{Repository: "test/repo"}, 15)
 
 	req := httptest.NewRequest("OPTIONS", "/api/issues", nil)
 	w := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestIssuesHandler_OPTIONS(t *testing.T) {
 }
 
 func TestIssuesHandler_MethodNotAllowed(t *testing.T) {
-	handler := NewIssuesHandler(&github.Client{Repository: "test/repo"})
+	handler := NewIssuesHandler(&github.Client{Repository: "test/repo"}, 15)
 
 	methods := []string{"POST", "PUT", "DELETE", "PATCH"}
 	for _, method := range methods {
@@ -285,7 +285,7 @@ func TestIssuesHandler_ResponseStructure(t *testing.T) {
 
 	// Use real client for integration test
 	client := github.NewClient("christophergyman/claude-quick")
-	handler := NewIssuesHandler(client)
+	handler := NewIssuesHandler(client, 15)
 
 	req := httptest.NewRequest("GET", "/api/issues", nil)
 	w := httptest.NewRecorder()
@@ -307,9 +307,9 @@ func TestIssuesHandler_ResponseStructure(t *testing.T) {
 		t.Fatalf("Failed to parse JSON: %v", err)
 	}
 
-	// Verify columns structure
-	if len(response.Columns) != 3 {
-		t.Errorf("Expected 3 columns, got %d", len(response.Columns))
+	// Verify columns structure (4 columns: Feature, Dev, Test/Merge, Done)
+	if len(response.Columns) != 4 {
+		t.Errorf("Expected 4 columns, got %d", len(response.Columns))
 	}
 
 	expectedColumns := []struct {
@@ -319,6 +319,7 @@ func TestIssuesHandler_ResponseStructure(t *testing.T) {
 		{"feature", "Feature"},
 		{"development", "Dev"},
 		{"test-merge", "Test/Merge"},
+		{"done", "Done"},
 	}
 
 	for i, expected := range expectedColumns {

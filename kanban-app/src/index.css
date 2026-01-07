@@ -777,6 +777,9 @@ textarea.form-input {
 .column:nth-child(3) .card:nth-child(1) { animation-delay: 0.15s; }
 .column:nth-child(3) .card:nth-child(2) { animation-delay: 0.2s; }
 .column:nth-child(3) .card:nth-child(3) { animation-delay: 0.25s; }
+.column:nth-child(4) .card:nth-child(1) { animation-delay: 0.2s; }
+.column:nth-child(4) .card:nth-child(2) { animation-delay: 0.25s; }
+.column:nth-child(4) .card:nth-child(3) { animation-delay: 0.3s; }
 
 .column {
   animation: fadeIn 0.4s ease backwards;
@@ -785,6 +788,7 @@ textarea.form-input {
 .column:nth-child(1) { animation-delay: 0s; }
 .column:nth-child(2) { animation-delay: 0.08s; }
 .column:nth-child(3) { animation-delay: 0.16s; }
+.column:nth-child(4) { animation-delay: 0.24s; }
 
 .modal {
   animation: slideIn 0.25s ease;
@@ -963,4 +967,14 @@ textarea.form-input {
 .label.merge {
   background: rgba(155, 89, 182, 0.12);
   color: #8e44ad;
+}
+
+/* Done label style */
+.card.label-done::before {
+  background: #27ae60;
+}
+
+.label.done {
+  background: rgba(39, 174, 96, 0.12);
+  color: #1e8449;
 }

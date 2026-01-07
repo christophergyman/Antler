@@ -1,5 +1,6 @@
 github:
   repository: "christophergyman/claude-quick"  # Change this to your GitHub repository (e.g., "facebook/react")
+  closed_issue_limit: 15  # Number of closed issues to show in Done column
 
 server:
   host: "100.100.66.102"  # Your server's IP or hostname (e.g., Tailscale IP)

@@ -604,15 +604,18 @@ function TaskFormModal({
 function SettingsModal({
   isOpen,
   currentRepo,
+  currentClosedIssueLimit,
   onClose,
   onSave,
 }: {
   isOpen: boolean;
   currentRepo: string;
+  currentClosedIssueLimit: number;
   onClose: () => void;
-  onSave: (repo: string) => void;
+  onSave: (repo: string, closedIssueLimit: number) => void;
 }) {
   const [repository, setRepository] = useState(currentRepo);
+  const [closedIssueLimit, setClosedIssueLimit] = useState(currentClosedIssueLimit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -620,9 +623,10 @@ function SettingsModal({
   useEffect(() => {
     if (isOpen) {
       setRepository(currentRepo);
+      setClosedIssueLimit(currentClosedIssueLimit);
       setError(null);
     }
-  }, [isOpen, currentRepo]);
+  }, [isOpen, currentRepo, currentClosedIssueLimit]);
 
   const handleSave = async () => {
     if (!repository.trim()) {
@@ -643,7 +647,10 @@ function SettingsModal({
       const response = await fetch(`${API_URL}/api/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repository: repository.trim() }),
+        body: JSON.stringify({
+          repository: repository.trim(),
+          closed_issue_limit: closedIssueLimit,
+        }),
       });
 
       if (!response.ok) {
@@ -651,7 +658,7 @@ function SettingsModal({
         throw new Error(text || 'Failed to save config');
       }
 
-      onSave(repository.trim());
+      onSave(repository.trim(), closedIssueLimit);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
@@ -696,6 +703,20 @@ function SettingsModal({
               disabled={saving}
             />
             <p className="form-hint">Enter the repository in "owner/repo" format (e.g., "facebook/react")</p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Closed Issues Limit</label>
+            <input
+              type="number"
+              className="form-input"
+              min="0"
+              max="100"
+              value={closedIssueLimit}
+              onChange={(e) => setClosedIssueLimit(parseInt(e.target.value) || 0)}
+              disabled={saving}
+            />
+            <p className="form-hint">Number of closed issues to show in Done column (0 to hide)</p>
           </div>
 
           {error && <p className="form-error">{error}</p>}
@@ -750,6 +771,7 @@ function App() {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentRepo, setCurrentRepo] = useState('');
+  const [closedIssueLimit, setClosedIssueLimit] = useState(15);
   const [configError, setConfigError] = useState(false);
 
   const fetchIssues = useCallback(async () => {
@@ -782,6 +804,7 @@ function App() {
       })
       .then((data) => {
         setCurrentRepo(data.repository || '');
+        setClosedIssueLimit(data.closed_issue_limit ?? 15);
         setConfigError(false);
       })
       .catch(() => {
@@ -789,8 +812,9 @@ function App() {
       });
   }, []);
 
-  const handleSettingsSave = useCallback((newRepo: string) => {
+  const handleSettingsSave = useCallback((newRepo: string, newClosedIssueLimit: number) => {
     setCurrentRepo(newRepo);
+    setClosedIssueLimit(newClosedIssueLimit);
     setConfigError(false);
     fetchIssues(); // Auto-reload issues from new repo
   }, [fetchIssues]);
@@ -1027,6 +1051,7 @@ function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         currentRepo={currentRepo}
+        currentClosedIssueLimit={closedIssueLimit}
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleSettingsSave}
       />

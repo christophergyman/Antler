@@ -61,6 +61,34 @@ func (c *Client) ListIssues() ([]Issue, error) {
 	return issues, nil
 }
 
+func (c *Client) ListClosedIssues(limit int) ([]Issue, error) {
+	if limit <= 0 {
+		return []Issue{}, nil
+	}
+
+	cmd := exec.Command("gh", "issue", "list",
+		"--repo", c.Repository,
+		"--state", "closed",
+		"--limit", fmt.Sprintf("%d", limit),
+		"--json", "number,title,body,labels,assignees,milestone,state",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("gh command failed: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("failed to run gh command: %w", err)
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(output, &issues); err != nil {
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	return issues, nil
+}
+
 // GetColumnForIssue determines which column an issue belongs to based on labels
 func GetColumnForIssue(issue Issue) string {
 	for _, label := range issue.Labels {

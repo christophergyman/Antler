@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 
@@ -13,7 +14,8 @@ type Config struct {
 }
 
 type GitHubConfig struct {
-	Repository string `yaml:"repository"`
+	Repository       string `yaml:"repository"`
+	ClosedIssueLimit int    `yaml:"closed_issue_limit"`
 }
 
 type ServerConfig struct {
@@ -48,10 +50,21 @@ func Save(path string, cfg *Config) error {
 		return os.WriteFile(path, data, 0644)
 	}
 
-	// Replace repository line while preserving comments
-	// Matches: repository: "value" or repository: 'value' or repository: value
-	repoRegex := regexp.MustCompile(`(?m)^(\s*repository:\s*)["']?[^"'\n]*["']?(.*)$`)
-	updated := repoRegex.ReplaceAllString(string(existing), `${1}"`+cfg.GitHub.Repository+`"${2}`)
+	content := string(existing)
 
-	return os.WriteFile(path, []byte(updated), 0644)
+	// Replace repository line while preserving comments
+	repoRegex := regexp.MustCompile(`(?m)^(\s*repository:\s*)["']?[^"'\n]*["']?(.*)$`)
+	content = repoRegex.ReplaceAllString(content, `${1}"`+cfg.GitHub.Repository+`"${2}`)
+
+	// Replace or add closed_issue_limit
+	limitRegex := regexp.MustCompile(`(?m)^(\s*closed_issue_limit:\s*)\d+(.*)$`)
+	if limitRegex.MatchString(content) {
+		content = limitRegex.ReplaceAllString(content, `${1}`+fmt.Sprintf("%d", cfg.GitHub.ClosedIssueLimit)+`${2}`)
+	} else {
+		// Add closed_issue_limit after repository line
+		repoLineRegex := regexp.MustCompile(`(?m)(^\s*repository:.*$)`)
+		content = repoLineRegex.ReplaceAllString(content, `${1}`+"\n  closed_issue_limit: "+fmt.Sprintf("%d", cfg.GitHub.ClosedIssueLimit))
+	}
+
+	return os.WriteFile(path, []byte(content), 0644)
 }

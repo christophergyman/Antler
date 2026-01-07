@@ -34,11 +34,15 @@ type IssuesResponse struct {
 }
 
 type IssuesHandler struct {
-	GitHubClient *github.Client
+	GitHubClient     *github.Client
+	ClosedIssueLimit int
 }
 
-func NewIssuesHandler(client *github.Client) *IssuesHandler {
-	return &IssuesHandler{GitHubClient: client}
+func NewIssuesHandler(client *github.Client, closedIssueLimit int) *IssuesHandler {
+	return &IssuesHandler{
+		GitHubClient:     client,
+		ClosedIssueLimit: closedIssueLimit,
+	}
 }
 
 func (h *IssuesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +61,15 @@ func (h *IssuesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch open issues
 	issues, err := h.GitHubClient.ListIssues()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch closed issues
+	closedIssues, err := h.GitHubClient.ListClosedIssues(h.ClosedIssueLimit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,9 +92,14 @@ func (h *IssuesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Title: "Test/Merge",
 			Tasks: []Task{},
 		},
+		"done": {
+			ID:    "done",
+			Title: "Done",
+			Tasks: []Task{},
+		},
 	}
 
-	// Map issues to columns
+	// Map open issues to columns based on labels
 	for _, issue := range issues {
 		task := issueToTask(issue)
 		columnID := github.GetColumnForIssue(issue)
@@ -91,11 +108,19 @@ func (h *IssuesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Map closed issues to done column
+	for _, issue := range closedIssues {
+		task := issueToTask(issue)
+		task.Label = "done" // Override label for closed issues
+		columns["done"].Tasks = append(columns["done"].Tasks, task)
+	}
+
 	response := IssuesResponse{
 		Columns: []Column{
 			*columns["feature"],
 			*columns["development"],
 			*columns["test-merge"],
+			*columns["done"],
 		},
 	}
 

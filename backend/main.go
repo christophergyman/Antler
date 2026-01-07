@@ -54,10 +54,16 @@ func main() {
 
 	log.Printf("Using GitHub repository: %s", cfg.GitHub.Repository)
 
+	// Set default for closed issue limit if not configured
+	if cfg.GitHub.ClosedIssueLimit == 0 {
+		cfg.GitHub.ClosedIssueLimit = 15
+	}
+	log.Printf("Closed issue limit: %d", cfg.GitHub.ClosedIssueLimit)
+
 	// Create GitHub client with mutex for thread-safe updates
 	var mu sync.RWMutex
 	ghClient := github.NewClient(cfg.GitHub.Repository)
-	issuesHandler := handlers.NewIssuesHandler(ghClient)
+	issuesHandler := handlers.NewIssuesHandler(ghClient, cfg.GitHub.ClosedIssueLimit)
 
 	// Setup routes - use wrapper to always use current handler
 	http.HandleFunc("/api/issues", func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +94,8 @@ func main() {
 
 		if r.Method == "POST" {
 			var req struct {
-				Repository string `json:"repository"`
+				Repository       string `json:"repository"`
+				ClosedIssueLimit *int   `json:"closed_issue_limit,omitempty"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -106,8 +113,13 @@ func main() {
 				return
 			}
 
-			// Update config and save to file
+			// Update config
 			cfg.GitHub.Repository = req.Repository
+			if req.ClosedIssueLimit != nil {
+				cfg.GitHub.ClosedIssueLimit = *req.ClosedIssueLimit
+			}
+
+			// Save to file
 			if err := config.Save(configPath, cfg); err != nil {
 				http.Error(w, "Failed to save config: "+err.Error(), http.StatusInternalServerError)
 				return
@@ -116,24 +128,26 @@ func main() {
 			// Update GitHub client with mutex protection
 			mu.Lock()
 			ghClient = github.NewClient(cfg.GitHub.Repository)
-			issuesHandler = handlers.NewIssuesHandler(ghClient)
+			issuesHandler = handlers.NewIssuesHandler(ghClient, cfg.GitHub.ClosedIssueLimit)
 			mu.Unlock()
 
-			log.Printf("Config updated: repository changed to %s", req.Repository)
+			log.Printf("Config updated: repository=%s, closed_issue_limit=%d", req.Repository, cfg.GitHub.ClosedIssueLimit)
 
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"repository": cfg.GitHub.Repository,
-				"message":    "Config saved successfully",
+				"repository":         cfg.GitHub.Repository,
+				"closed_issue_limit": cfg.GitHub.ClosedIssueLimit,
+				"message":            "Config saved successfully",
 			})
 			return
 		}
 
 		// GET request
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"repository":    cfg.GitHub.Repository,
-			"host":          cfg.Server.Host,
-			"backend_port":  cfg.Server.BackendPort,
-			"frontend_port": cfg.Server.FrontendPort,
+			"repository":         cfg.GitHub.Repository,
+			"closed_issue_limit": cfg.GitHub.ClosedIssueLimit,
+			"host":               cfg.Server.Host,
+			"backend_port":       cfg.Server.BackendPort,
+			"frontend_port":      cfg.Server.FrontendPort,
 		})
 	})
 
