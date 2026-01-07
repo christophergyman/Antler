@@ -1,0 +1,9 @@
+# Build artifacts
+antler-backend
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
