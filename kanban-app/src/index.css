@@ -815,6 +815,62 @@ textarea.form-input {
   transform: translateY(0);
 }
 
+/* Settings button */
+.settings-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--cream-dark);
+  border: 1px solid rgba(26, 26, 26, 0.08);
+  color: var(--sage);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: rgba(26, 26, 26, 0.08);
+  color: var(--charcoal);
+  transform: translateY(-1px);
+}
+
+.settings-btn:active {
+  transform: translateY(0);
+}
+
+.settings-btn-error {
+  border-color: var(--terracotta);
+}
+
+.settings-error-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: var(--terracotta);
+  border-radius: 50%;
+}
+
+/* Form helper text */
+.form-hint {
+  font-size: 0.8125rem;
+  color: var(--sage);
+  margin-top: 6px;
+}
+
+.form-error {
+  font-size: 0.875rem;
+  color: var(--terracotta);
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(217, 119, 87, 0.1);
+  border-radius: 6px;
+}
+
 /* Loading state */
 .loading-container {
   flex: 1;

@@ -101,6 +101,13 @@ const RefreshIcon = () => (
   </svg>
 );
 
+const SettingsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 // Drop indicator component
 function DropIndicator({ isVisible }: { isVisible: boolean }) {
   if (!isVisible) return null;
@@ -593,6 +600,120 @@ function TaskFormModal({
   );
 }
 
+// Settings modal
+function SettingsModal({
+  isOpen,
+  currentRepo,
+  onClose,
+  onSave,
+}: {
+  isOpen: boolean;
+  currentRepo: string;
+  onClose: () => void;
+  onSave: (repo: string) => void;
+}) {
+  const [repository, setRepository] = useState(currentRepo);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sync when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setRepository(currentRepo);
+      setError(null);
+    }
+  }, [isOpen, currentRepo]);
+
+  const handleSave = async () => {
+    if (!repository.trim()) {
+      setError('Repository is required');
+      return;
+    }
+
+    // Basic validation: should be in "owner/repo" format
+    if (!repository.includes('/')) {
+      setError('Repository should be in "owner/repo" format');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repository: repository.trim() }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Failed to save config');
+      }
+
+      onSave(repository.trim());
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="modal"
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2 className="modal-title">Settings</h2>
+            <button className="modal-close" onClick={onClose}>
+              <CloseIcon />
+            </button>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">GitHub Repository</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="owner/repo"
+              value={repository}
+              onChange={(e) => setRepository(e.target.value)}
+              disabled={saving}
+            />
+            <p className="form-hint">Enter the repository in "owner/repo" format (e.g., "facebook/react")</p>
+          </div>
+
+          {error && <p className="form-error">{error}</p>}
+
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // Loading spinner component
 function LoadingSpinner() {
   return (
@@ -627,6 +748,9 @@ function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentRepo, setCurrentRepo] = useState('');
+  const [configError, setConfigError] = useState(false);
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -647,6 +771,28 @@ function App() {
 
   useEffect(() => {
     fetchIssues();
+  }, [fetchIssues]);
+
+  // Fetch current config on mount
+  useEffect(() => {
+    fetch(`${API_URL}/api/config`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch config');
+        return res.json();
+      })
+      .then((data) => {
+        setCurrentRepo(data.repository || '');
+        setConfigError(false);
+      })
+      .catch(() => {
+        setConfigError(true);
+      });
+  }, []);
+
+  const handleSettingsSave = useCallback((newRepo: string) => {
+    setCurrentRepo(newRepo);
+    setConfigError(false);
+    fetchIssues(); // Auto-reload issues from new repo
   }, [fetchIssues]);
 
   const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
@@ -823,12 +969,20 @@ function App() {
           <h1>Kanban Board</h1>
         </div>
         <div className="header-right">
-          <button className="refresh-btn" onClick={fetchIssues} title="Refresh issues">
-            <RefreshIcon />
-          </button>
           <button className="add-task-btn" onClick={() => setIsAddModalOpen(true)}>
             <PlusIcon />
             Add Task
+          </button>
+          <button className="refresh-btn" onClick={fetchIssues} title="Refresh issues">
+            <RefreshIcon />
+          </button>
+          <button
+            className={`settings-btn ${configError ? 'settings-btn-error' : ''}`}
+            onClick={() => setIsSettingsOpen(true)}
+            title={configError ? "Settings (config error)" : "Settings"}
+          >
+            <SettingsIcon />
+            {configError && <span className="settings-error-dot" />}
           </button>
         </div>
       </header>
@@ -868,6 +1022,13 @@ function App() {
         task={taskToDelete}
         onClose={() => setTaskToDelete(null)}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        currentRepo={currentRepo}
+        onClose={() => setIsSettingsOpen(false)}
+        onSave={handleSettingsSave}
       />
     </div>
   );
