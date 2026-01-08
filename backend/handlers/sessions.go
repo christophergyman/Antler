@@ -120,7 +120,9 @@ func (h *SessionsHandler) handleStartDev(w http.ResponseWriter, r *http.Request,
 
 	if h.Orchestrator == nil || !h.Orchestrator.IsConfigured() {
 		log.Printf("❌ Issue #%d: Orchestrator not configured", issueNumber)
-		http.Error(w, "Orchestrator not configured. Set orchestrator.project_path in config.", http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(SessionResponse{Error: "Orchestrator not configured. Set orchestrator.project_path in config."})
 		return
 	}
 
@@ -129,7 +131,9 @@ func (h *SessionsHandler) handleStartDev(w http.ResponseWriter, r *http.Request,
 	issue, err := h.GitHubClient.GetIssue(issueNumber)
 	if err != nil {
 		log.Printf("❌ Issue #%d: Failed to fetch from GitHub: %v", issueNumber, err)
-		http.Error(w, "Failed to fetch issue: "+err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(SessionResponse{Error: "Failed to fetch issue: " + err.Error()})
 		return
 	}
 	log.Printf("   Issue: %s", issue.Title)
@@ -183,7 +187,9 @@ func (h *SessionsHandler) handleStopDev(w http.ResponseWriter, r *http.Request, 
 
 	if h.Orchestrator == nil {
 		log.Printf("❌ Issue #%d: Orchestrator not configured", issueNumber)
-		http.Error(w, "Orchestrator not configured", http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(SessionResponse{Error: "Orchestrator not configured"})
 		return
 	}
 

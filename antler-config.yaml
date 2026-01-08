@@ -6,3 +6,8 @@ server:
   host: "100.100.66.102"  # Your server's IP or hostname (e.g., Tailscale IP)
   backend_port: 8083
   frontend_port: 3000
+
+orchestrator:
+  project_path: "/home/chezu/github/claude-quick"  # Target repo for dev environments
+  worktree_base: "../antler-worktrees"             # Where worktrees are created
+  cleanup_worktree_on_stop: false                  # Keep worktrees after stopping

@@ -28,11 +28,12 @@ func main() {
 		execPath = "."
 	}
 
-	// Try multiple config locations
+	// Try multiple config locations (current dir first, then parent)
 	configPaths := []string{
+		"antler-config.yaml",
 		"../antler-config.yaml",
+		filepath.Join(filepath.Dir(execPath), "antler-config.yaml"),
 		filepath.Join(filepath.Dir(execPath), "..", "antler-config.yaml"),
-		"/home/chezu/github/Antler/antler-config.yaml",
 	}
 
 	var cfg *config.Config
