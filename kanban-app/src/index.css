@@ -1061,3 +1061,336 @@ textarea.form-input {
   background: rgba(39, 174, 96, 0.12);
   color: #1e8449;
 }
+
+/* ===== Dev Session Progress Visualization ===== */
+
+/* Card starting overlay - warm glass effect */
+.card-starting-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(250, 249, 247, 0.92) 0%,
+    rgba(240, 237, 232, 0.88) 100%
+  );
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+[data-theme="dark"] .card-starting-overlay {
+  background: linear-gradient(
+    135deg,
+    rgba(30, 30, 30, 0.92) 0%,
+    rgba(40, 40, 40, 0.88) 100%
+  );
+}
+
+/* Spinner with warm terracotta accent */
+.card-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--cream-dark);
+  border-top-color: var(--terracotta);
+  border-radius: 50%;
+  animation: spin 0.75s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+[data-theme="dark"] .card-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--terracotta);
+}
+
+.card-starting-text {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--sage);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* Running badge - organic green with pulse */
+.running-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(39, 174, 96, 0.12);
+  color: #27ae60;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+[data-theme="dark"] .running-badge {
+  background: rgba(46, 204, 113, 0.18);
+  color: #2ecc71;
+}
+
+.running-badge-dot {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+/* Active session card indicator */
+.card.has-active-session {
+  border-color: rgba(39, 174, 96, 0.35);
+}
+
+.card.has-active-session::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background: #27ae60;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(39, 174, 96, 0.5);
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+[data-theme="dark"] .card.has-active-session::after {
+  background: #2ecc71;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.6);
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 8px rgba(39, 174, 96, 0.5);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 12px rgba(39, 174, 96, 0.7);
+  }
+}
+
+/* Success modal - warm celebration style */
+.success-modal {
+  text-align: center;
+  max-width: 400px;
+}
+
+.success-modal-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(39, 174, 96, 0.15) 0%,
+    rgba(46, 204, 113, 0.1) 100%
+  );
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #27ae60;
+  box-shadow:
+    0 4px 16px rgba(39, 174, 96, 0.15),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .success-modal-icon {
+  background: linear-gradient(
+    135deg,
+    rgba(46, 204, 113, 0.2) 0%,
+    rgba(39, 174, 96, 0.12) 100%
+  );
+  color: #2ecc71;
+  box-shadow:
+    0 4px 16px rgba(46, 204, 113, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.1);
+}
+
+.success-modal-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.success-modal-title {
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.success-modal-subtitle {
+  font-size: 0.9375rem;
+  color: var(--sage);
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+/* Session info card */
+.session-info {
+  background: var(--cream-dark);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  text-align: left;
+  border: 1px solid var(--card-border);
+}
+
+[data-theme="dark"] .session-info {
+  background: rgba(50, 50, 50, 0.5);
+}
+
+.session-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+}
+
+.session-info-row svg {
+  color: var(--sage);
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.session-info-label {
+  color: var(--sage);
+  font-weight: 500;
+}
+
+.session-info-value {
+  color: var(--charcoal);
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8125rem;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: auto;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .session-info-value {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Tmux command section */
+.tmux-command-section {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.tmux-command-section .form-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--sage-dark);
+}
+
+.tmux-command-section .form-label svg {
+  color: var(--sage);
+}
+
+.tmux-command-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color 0.2s ease;
+}
+
+.tmux-command-box:hover {
+  border-color: var(--sage-light);
+}
+
+.tmux-command-box code {
+  flex: 1;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8125rem;
+  color: var(--charcoal);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* Copy button */
+.copy-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--cream-dark);
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  color: var(--sage);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: var(--column-bg);
+  color: var(--charcoal);
+  border-color: var(--sage-light);
+  transform: translateY(-1px);
+}
+
+.copy-btn:active {
+  transform: translateY(0);
+}
+
+.copy-btn.copied {
+  background: rgba(39, 174, 96, 0.12);
+  border-color: rgba(39, 174, 96, 0.3);
+  color: #27ae60;
+}
+
+[data-theme="dark"] .copy-btn {
+  background: rgba(50, 50, 50, 0.6);
+}
+
+[data-theme="dark"] .copy-btn:hover {
+  background: rgba(60, 60, 60, 0.8);
+}
+
+[data-theme="dark"] .copy-btn.copied {
+  background: rgba(46, 204, 113, 0.18);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: #2ecc71;
+}
+
+/* Success modal single button centered */
+.success-modal .modal-actions {
+  justify-content: center;
+}
+
+.success-modal .btn-primary {
+  min-width: 140px;
+}

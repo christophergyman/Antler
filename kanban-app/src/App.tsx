@@ -44,6 +44,37 @@ interface ErrorModalState {
   onRetry?: () => void;
 }
 
+// Session types matching backend
+type SessionStatus = 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
+
+interface Session {
+  issue_number: number;
+  issue_title: string;
+  branch: string;
+  worktree_path: string;
+  container_id?: string;
+  tmux_session: string;
+  status: SessionStatus;
+  started_at: string;
+  error?: string;
+}
+
+interface SessionResponse {
+  session?: Session;
+  error?: string;
+}
+
+interface ActiveSessionStart {
+  issueNumber: string;
+  status: SessionStatus;
+  stepText: string;
+}
+
+interface SuccessModalState {
+  isOpen: boolean;
+  session: Session | null;
+}
+
 // Icons
 const PlusIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,6 +168,26 @@ const SunIcon = () => (
   </svg>
 );
 
+const CheckIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+);
+
+const TerminalIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" x2="20" y1="19" y2="19" />
+  </svg>
+);
+
 // API functions for session management
 async function updateIssueLabels(
   issueNumber: string,
@@ -154,14 +205,39 @@ async function updateIssueLabels(
   }
 }
 
-async function startDevSession(issueNumber: string): Promise<void> {
+async function startDevSession(issueNumber: string): Promise<Session> {
   const response = await fetch(`${API_URL}/api/issues/${issueNumber}/start-dev`, {
     method: 'POST',
   });
-  const data = await response.json();
+  const data: SessionResponse = await response.json();
   if (!response.ok || data.error) {
     throw new Error(data.error || 'Failed to start dev session');
   }
+  if (!data.session) {
+    throw new Error('No session returned');
+  }
+  return data.session;
+}
+
+async function getSessionStatus(issueNumber: string): Promise<Session | null> {
+  const response = await fetch(`${API_URL}/api/sessions/${issueNumber}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error('Failed to fetch session status');
+  }
+  const data: SessionResponse = await response.json();
+  return data.session || null;
+}
+
+async function listSessions(): Promise<Session[]> {
+  const response = await fetch(`${API_URL}/api/sessions`);
+  if (!response.ok) {
+    return [];
+  }
+  const data = await response.json();
+  return data.sessions || [];
 }
 
 async function stopDevSession(issueNumber: string): Promise<void> {
@@ -210,6 +286,8 @@ function TaskCard({
   onDeleteClick,
   draggedTaskId,
   dropTarget,
+  startingSession,
+  activeSession,
 }: {
   task: Task;
   index: number;
@@ -220,10 +298,14 @@ function TaskCard({
   onDeleteClick: (task: Task) => void;
   draggedTaskId: string | null;
   dropTarget: DropTarget | null;
+  startingSession?: ActiveSessionStart;
+  activeSession?: Session;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const isDragging = draggedTaskId === task.id;
   const showIndicatorBefore = dropTarget?.columnId === columnId && dropTarget?.index === index && draggedTaskId !== task.id;
+  const isStarting = !!startingSession;
+  const isRunning = activeSession?.status === 'running';
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -241,20 +323,40 @@ function TaskCard({
       <DropIndicator isVisible={showIndicatorBefore} />
       <motion.div
         ref={cardRef}
-        className={`card label-${task.label} ${isDragging ? 'dragging' : ''}`}
-        draggable
+        className={`card label-${task.label} ${isDragging ? 'dragging' : ''} ${isRunning ? 'has-active-session' : ''}`}
+        draggable={!isStarting}
         onDragStart={(e) => onDragStart(e as unknown as React.DragEvent, task.id)}
         onDragOver={handleDragOver}
         layout
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: isDragging ? 0.5 : 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        whileHover={isDragging ? {} : { y: -2 }}
+        whileHover={isDragging || isStarting ? {} : { y: -2 }}
         transition={{ duration: 0.2 }}
       >
+        {/* Spinner overlay when starting */}
+        {isStarting && (
+          <motion.div
+            className="card-starting-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="card-spinner" />
+            <span className="card-starting-text">{startingSession.stepText}</span>
+          </motion.div>
+        )}
+
         <div className="card-header">
           <h3 className="card-title">{task.title}</h3>
           <div className="card-actions">
+            {/* Running badge */}
+            {isRunning && (
+              <span className="running-badge">
+                <span className="running-badge-dot" />
+                Running
+              </span>
+            )}
             <button
               className="card-action-btn edit"
               onClick={(e) => {
@@ -308,6 +410,8 @@ function KanbanColumn({
   onDeleteClick,
   draggedTaskId,
   dropTarget,
+  startingSessions,
+  activeSessions,
 }: {
   column: Column;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
@@ -317,6 +421,8 @@ function KanbanColumn({
   onDeleteClick: (task: Task) => void;
   draggedTaskId: string | null;
   dropTarget: DropTarget | null;
+  startingSessions: Map<string, ActiveSessionStart>;
+  activeSessions: Map<string, Session>;
 }) {
   const isOver = dropTarget?.columnId === column.id;
   const showIndicatorAtEnd = isOver && dropTarget?.index === column.tasks.length;
@@ -360,6 +466,8 @@ function KanbanColumn({
               onDeleteClick={onDeleteClick}
               draggedTaskId={draggedTaskId}
               dropTarget={dropTarget}
+              startingSession={startingSessions.get(task.id)}
+              activeSession={activeSessions.get(task.id)}
             />
           ))}
         </AnimatePresence>
@@ -899,6 +1007,88 @@ function ErrorModal({
   );
 }
 
+// Dev session success modal
+function DevSessionSuccessModal({
+  state,
+  onClose,
+}: {
+  state: SuccessModalState;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  if (!state.isOpen || !state.session) return null;
+
+  const tmuxCommand = `tmux attach -t ${state.session.tmux_session}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(tmuxCommand);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="modal success-modal"
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="success-modal-icon">
+            <CheckIcon />
+          </div>
+          <h2 className="success-modal-title">Dev Session Ready</h2>
+          <p className="success-modal-subtitle">{state.session.issue_title}</p>
+
+          <div className="session-info">
+            <div className="session-info-row">
+              <BranchIcon />
+              <span className="session-info-label">Branch</span>
+              <span className="session-info-value">{state.session.branch}</span>
+            </div>
+          </div>
+
+          <div className="tmux-command-section">
+            <label className="form-label">
+              <TerminalIcon />
+              Connect via tmux
+            </label>
+            <div className="tmux-command-box">
+              <code>{tmuxCommand}</code>
+              <button
+                className={`copy-btn ${copied ? 'copied' : ''}`}
+                onClick={handleCopy}
+                title={copied ? 'Copied!' : 'Copy to clipboard'}
+              >
+                {copied ? <CheckIcon /> : <CopyIcon />}
+              </button>
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <button className="btn btn-primary" onClick={onClose}>
+              Got it
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // Loading spinner component
 function LoadingSpinner() {
   return (
@@ -946,6 +1136,14 @@ function App() {
     isOpen: false,
     title: '',
     message: '',
+  });
+
+  // Session management state
+  const [activeSessions, setActiveSessions] = useState<Map<string, Session>>(new Map());
+  const [startingSessions, setStartingSessions] = useState<Map<string, ActiveSessionStart>>(new Map());
+  const [successModal, setSuccessModal] = useState<SuccessModalState>({
+    isOpen: false,
+    session: null,
   });
 
   // Apply theme to document
@@ -1011,6 +1209,101 @@ function App() {
       .catch(() => {
         setConfigError(true);
       });
+  }, []);
+
+  // Load existing sessions on mount (for page refresh persistence)
+  useEffect(() => {
+    listSessions().then((sessions) => {
+      const sessionMap = new Map<string, Session>();
+      for (const session of sessions) {
+        if (session.status === 'running') {
+          sessionMap.set(String(session.issue_number), session);
+        }
+      }
+      setActiveSessions(sessionMap);
+    });
+  }, []);
+
+  // Poll for session status when sessions are starting
+  useEffect(() => {
+    const pollingSessions = Array.from(startingSessions.entries()).filter(
+      ([, s]) => s.status === 'starting'
+    );
+
+    if (pollingSessions.length === 0) return;
+
+    const intervalId = setInterval(async () => {
+      for (const [issueNumber] of pollingSessions) {
+        try {
+          const session = await getSessionStatus(issueNumber);
+          if (!session) continue;
+
+          if (session.status === 'running') {
+            // Session is ready - show success modal
+            setStartingSessions((prev) => {
+              const next = new Map(prev);
+              next.delete(issueNumber);
+              return next;
+            });
+            setActiveSessions((prev) => new Map(prev).set(issueNumber, session));
+            setSuccessModal({ isOpen: true, session });
+          } else if (session.status === 'error') {
+            // Session failed
+            setStartingSessions((prev) => {
+              const next = new Map(prev);
+              next.delete(issueNumber);
+              return next;
+            });
+            setErrorModal({
+              isOpen: true,
+              title: 'Dev Session Failed',
+              message: session.error || 'Unknown error occurred',
+              onRetry: () => handleRetryDevSession(issueNumber),
+            });
+          }
+          // If still 'starting', continue polling
+        } catch (err) {
+          console.error('Failed to poll session status:', err);
+        }
+      }
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, [startingSessions]);
+
+  // Retry handler for dev session
+  const handleRetryDevSession = useCallback(async (issueNumber: string) => {
+    setStartingSessions((prev) =>
+      new Map(prev).set(issueNumber, {
+        issueNumber,
+        status: 'starting',
+        stepText: 'Starting session...',
+      })
+    );
+
+    try {
+      const session = await startDevSession(issueNumber);
+      if (session.status === 'running') {
+        setStartingSessions((prev) => {
+          const next = new Map(prev);
+          next.delete(issueNumber);
+          return next;
+        });
+        setActiveSessions((prev) => new Map(prev).set(issueNumber, session));
+        setSuccessModal({ isOpen: true, session });
+      }
+    } catch (err) {
+      setStartingSessions((prev) => {
+        const next = new Map(prev);
+        next.delete(issueNumber);
+        return next;
+      });
+      setErrorModal({
+        isOpen: true,
+        title: 'Failed to Start Dev Session',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
   }, []);
 
   const handleSettingsSave = useCallback((newRepo: string, newClosedIssueLimit: number) => {
@@ -1133,30 +1426,53 @@ function App() {
 
           // Special handling: Feature → Development (start dev session)
           if (sourceColumnId === 'feature' && targetColumnId === 'development') {
+            // Set starting state immediately for spinner overlay
+            setStartingSessions((prev) =>
+              new Map(prev).set(taskId, {
+                issueNumber: taskId,
+                status: 'starting',
+                stepText: 'Starting session...',
+              })
+            );
+
             try {
-              await startDevSession(taskId);
+              const session = await startDevSession(taskId);
+
+              if (session.status === 'running') {
+                // Immediate success (unlikely but handle it)
+                setStartingSessions((prev) => {
+                  const next = new Map(prev);
+                  next.delete(taskId);
+                  return next;
+                });
+                setActiveSessions((prev) => new Map(prev).set(taskId, session));
+                setSuccessModal({ isOpen: true, session });
+              }
+              // If status is 'starting', polling will handle the rest
             } catch (err) {
+              setStartingSessions((prev) => {
+                const next = new Map(prev);
+                next.delete(taskId);
+                return next;
+              });
               setErrorModal({
                 isOpen: true,
                 title: 'Failed to Start Dev Session',
                 message: err instanceof Error ? err.message : 'Unknown error',
-                onRetry: async () => {
-                  try {
-                    await startDevSession(taskId);
-                  } catch (retryErr) {
-                    setErrorModal({
-                      isOpen: true,
-                      title: 'Failed to Start Dev Session',
-                      message: retryErr instanceof Error ? retryErr.message : 'Unknown error',
-                    });
-                  }
-                },
+                onRetry: () => handleRetryDevSession(taskId),
               });
             }
           }
 
           // Special handling: Development → any other column (stop dev session)
           if (sourceColumnId === 'development' && targetColumnId !== 'development') {
+            // Remove from active sessions
+            setActiveSessions((prev) => {
+              const next = new Map(prev);
+              next.delete(taskId);
+              return next;
+            });
+
             try {
               await stopDevSession(taskId);
             } catch (err) {
@@ -1310,6 +1626,8 @@ function App() {
             onDeleteClick={handleDeleteClick}
             draggedTaskId={draggedTaskId}
             dropTarget={dropTarget}
+            startingSessions={startingSessions}
+            activeSessions={activeSessions}
           />
         ))}
       </main>
@@ -1348,6 +1666,11 @@ function App() {
       <ErrorModal
         state={errorModal}
         onClose={() => setErrorModal({ isOpen: false, title: '', message: '' })}
+      />
+
+      <DevSessionSuccessModal
+        state={successModal}
+        onClose={() => setSuccessModal({ isOpen: false, session: null })}
       />
     </div>
   );
