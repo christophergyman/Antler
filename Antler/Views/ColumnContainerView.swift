@@ -76,6 +76,7 @@ struct ColumnContainerView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(columnBackgroundColor)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(isTargeted ? columnColor : Color.clear, lineWidth: 2)

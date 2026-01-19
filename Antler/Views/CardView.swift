@@ -20,28 +20,51 @@ struct CardView: View {
         #endif
     }
 
+    private var statusColor: Color {
+        switch card.status {
+        case .prepped:
+            return .blue
+        case .inProgress:
+            return .orange
+        case .mergeReady:
+            return .green
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(card.title.isEmpty ? "Untitled" : card.title)
-                    .font(.headline)
-                    .lineLimit(2)
+            // Status row with drag handle
+            HStack(spacing: 8) {
+                // Drag handle (6-dot grid)
+                Image(systemName: "rectangle.grid.2x2")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.5))
+
+                // Status dot
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+
                 Spacer()
+
+                // Status label (uppercase)
+                Text(card.status.displayName.uppercased())
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(statusColor)
             }
 
+            // Title
+            Text(card.title.isEmpty ? "Untitled" : card.title)
+                .font(.headline)
+                .lineLimit(2)
+
+            // Description (only if not empty)
             if !card.cardDescription.isEmpty {
                 Text(card.cardDescription)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(3)
-            }
-
-            if let tags = card.tags, !tags.isEmpty {
-                FlowLayout(spacing: 4) {
-                    ForEach(tags) { tag in
-                        TagBadgeView(tag: tag)
-                    }
-                }
             }
         }
         .padding(12)

@@ -18,26 +18,43 @@ enum ViewMode: String, CaseIterable {
     }
 }
 
+enum EditorState: Identifiable {
+    case newCard(position: CGPoint?)
+    case editCard(Card)
+
+    var id: String {
+        switch self {
+        case .newCard(let pos):
+            return "new-\(pos?.x ?? 0)-\(pos?.y ?? 0)"
+        case .editCard(let card):
+            return card.id.uuidString
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var cards: [Card]
 
     @State private var viewMode: ViewMode = .columns
-    @State private var selectedCard: Card?
-    @State private var showingEditor = false
-    @State private var newCardPosition: CGPoint?
+    @State private var editorState: EditorState?
     @State private var showingTagManager = false
 
     var body: some View {
         Group {
             switch viewMode {
             case .columns:
-                ColumnView(selectedCard: $selectedCard, showingEditor: $showingEditor)
+                ColumnView(onEditCard: { card in
+                    editorState = .editCard(card)
+                })
             case .freeform:
                 FreeformCanvasView(
-                    selectedCard: $selectedCard,
-                    showingEditor: $showingEditor,
-                    newCardPosition: $newCardPosition
+                    onEditCard: { card in
+                        editorState = .editCard(card)
+                    },
+                    onNewCard: { position in
+                        editorState = .newCard(position: position)
+                    }
                 )
             }
         }
@@ -60,29 +77,26 @@ struct ContentView: View {
                 .help("Manage tags")
 
                 Button {
-                    newCardPosition = nil
-                    selectedCard = nil
-                    showingEditor = true
+                    editorState = .newCard(position: nil)
                 } label: {
                     Label("New Card", systemImage: "plus")
                 }
                 .help("Create a new card")
             }
         }
-        .sheet(isPresented: $showingEditor) {
-            CardEditorView(
-                card: selectedCard,
-                initialStatus: .prepped,
-                initialPosition: newCardPosition
-            )
+        .sheet(item: $editorState) { state in
+            switch state {
+            case .newCard(let position):
+                CardEditorView(card: nil, initialStatus: .prepped, initialPosition: position)
+            case .editCard(let card):
+                CardEditorView(card: card)
+            }
         }
         .sheet(isPresented: $showingTagManager) {
             TagManagerView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .newCard)) { _ in
-            newCardPosition = nil
-            selectedCard = nil
-            showingEditor = true
+            editorState = .newCard(position: nil)
         }
         #if os(macOS)
         .frame(minWidth: 900, minHeight: 600)

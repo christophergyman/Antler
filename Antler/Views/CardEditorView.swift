@@ -34,9 +34,20 @@ struct CardEditorView: View {
             Form {
                 Section("Details") {
                     TextField("Title", text: $title)
+                        .multilineTextAlignment(.center)
+                        .labelsHidden()
+
                     #if os(macOS)
-                    TextEditor(text: $cardDescription)
-                        .frame(minHeight: 100)
+                    ZStack(alignment: .topLeading) {
+                        if cardDescription.isEmpty {
+                            Text("Description")
+                                .foregroundColor(.secondary)
+                                .padding(.top, 8)
+                                .padding(.leading, 4)
+                        }
+                        TextEditor(text: $cardDescription)
+                            .frame(minHeight: 100)
+                    }
                     #else
                     TextField("Description", text: $cardDescription, axis: .vertical)
                         .lineLimit(4...10)
@@ -50,6 +61,7 @@ struct CardEditorView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
 
                 Section {

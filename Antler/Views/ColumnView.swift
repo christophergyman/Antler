@@ -10,8 +10,7 @@ struct ColumnView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Card.sortOrder) private var allCards: [Card]
 
-    @Binding var selectedCard: Card?
-    @Binding var showingEditor: Bool
+    var onEditCard: (Card) -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -20,8 +19,7 @@ struct ColumnView: View {
                     status: status,
                     cards: allCards.filter { $0.status == status },
                     onCardTap: { card in
-                        selectedCard = card
-                        showingEditor = true
+                        onEditCard(card)
                     },
                     onCardDelete: { card in
                         deleteCard(card)

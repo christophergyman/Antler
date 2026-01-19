@@ -10,9 +10,8 @@ struct FreeformCanvasView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var cards: [Card]
 
-    @Binding var selectedCard: Card?
-    @Binding var showingEditor: Bool
-    @Binding var newCardPosition: CGPoint?
+    var onEditCard: (Card) -> Void
+    var onNewCard: (CGPoint?) -> Void
 
     @State private var draggedCard: Card?
     @State private var dragOffset: CGSize = .zero
@@ -74,15 +73,13 @@ struct FreeformCanvasView: View {
             .contextMenu {
                 Button("New Card Here") {
                     // This won't have exact position, but we can set a default
-                    newCardPosition = CGPoint(x: 200, y: 200)
-                    showingEditor = true
+                    onNewCard(CGPoint(x: 200, y: 200))
                 }
             }
             .onTapGesture(count: 2) { location in
                 let canvasX = (location.x - canvasOffset.width - geometry.size.width / 2) / scale
                 let canvasY = (location.y - canvasOffset.height - geometry.size.height / 2) / scale
-                newCardPosition = CGPoint(x: canvasX, y: canvasY)
-                showingEditor = true
+                onNewCard(CGPoint(x: canvasX, y: canvasY))
             }
             .dropDestination(for: CardTransfer.self) { items, location in
                 guard let transfer = items.first,
@@ -103,8 +100,7 @@ struct FreeformCanvasView: View {
         CardView(
             card: card,
             onTap: {
-                selectedCard = card
-                showingEditor = true
+                onEditCard(card)
             },
             onDelete: {
                 withAnimation {
