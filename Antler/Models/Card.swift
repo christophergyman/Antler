@@ -11,6 +11,7 @@ final class Card {
     var id: UUID
     var title: String
     var cardDescription: String
+    var branchName: String = ""
     var statusRaw: String
     var positionX: Double
     var positionY: Double
@@ -31,6 +32,7 @@ final class Card {
     init(
         title: String = "",
         cardDescription: String = "",
+        branchName: String = "",
         status: CardStatus = .prepped,
         positionX: Double = 100,
         positionY: Double = 100,
@@ -39,6 +41,7 @@ final class Card {
         self.id = UUID()
         self.title = title
         self.cardDescription = cardDescription
+        self.branchName = branchName
         self.statusRaw = status.rawValue
         self.positionX = positionX
         self.positionY = positionY

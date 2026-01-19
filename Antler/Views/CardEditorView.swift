@@ -17,11 +17,28 @@ struct CardEditorView: View {
 
     @State private var title: String = ""
     @State private var cardDescription: String = ""
+    @State private var branchName: String = ""
     @State private var status: CardStatus = .prepped
     @State private var selectedTags: Set<UUID> = []
     @State private var showingTagManager = false
+    @State private var selectedIssue: GitHubIssue?
+    @State private var branchManuallyEdited = false
 
     private var isNewCard: Bool { card == nil }
+
+    private static let issueTemplate = """
+    ## Is your feature request related to a problem?
+
+
+    ## Describe the solution you'd like
+
+
+    ## Describe alternatives you've considered
+
+
+    ## Additional context
+
+    """
 
     init(card: Card? = nil, initialStatus: CardStatus = .prepped, initialPosition: CGPoint? = nil) {
         self.card = card
@@ -32,25 +49,84 @@ struct CardEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if isNewCard {
+                    Section("Import from GitHub Issue") {
+                        Picker("Issue", selection: $selectedIssue) {
+                            Text("None").tag(nil as GitHubIssue?)
+                            ForEach(MockGitHubData.issues) { issue in
+                                Text(issue.displayTitle).tag(issue as GitHubIssue?)
+                            }
+                        }
+                        .onChange(of: selectedIssue) { _, newIssue in
+                            if let issue = newIssue {
+                                title = issue.title
+                                cardDescription = issue.body
+                                branchName = BranchNameGenerator.generate(from: issue.title)
+                                branchManuallyEdited = false
+                            }
+                        }
+                    }
+                }
+
                 Section("Details") {
                     TextField("Title", text: $title)
-                        .multilineTextAlignment(.center)
-                        .labelsHidden()
+                        .onChange(of: title) { _, newTitle in
+                            if !branchManuallyEdited {
+                                branchName = BranchNameGenerator.generate(from: newTitle)
+                            }
+                        }
+
+                    HStack {
+                        Image(systemName: "arrow.triangle.branch")
+                            .foregroundColor(.secondary)
+                        TextField("Branch name", text: $branchName)
+                            .font(.system(.body, design: .monospaced))
+                            .onChange(of: branchName) { oldValue, newValue in
+                                let expectedBranch = BranchNameGenerator.generate(from: title)
+                                if newValue != expectedBranch && !oldValue.isEmpty {
+                                    branchManuallyEdited = true
+                                }
+                            }
+                    }
 
                     #if os(macOS)
-                    ZStack(alignment: .topLeading) {
-                        if cardDescription.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
                             Text("Description")
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
-                                .padding(.top, 8)
-                                .padding(.leading, 4)
+                            Spacer()
+                            if cardDescription.isEmpty && selectedIssue == nil {
+                                Button("Insert template") {
+                                    cardDescription = Self.issueTemplate
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.subheadline)
+                            }
                         }
                         TextEditor(text: $cardDescription)
-                            .frame(minHeight: 100)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 150)
                     }
                     #else
-                    TextField("Description", text: $cardDescription, axis: .vertical)
-                        .lineLimit(4...10)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Description")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            if cardDescription.isEmpty && selectedIssue == nil {
+                                Button("Insert template") {
+                                    cardDescription = Self.issueTemplate
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.subheadline)
+                            }
+                        }
+                        TextField("Description", text: $cardDescription, axis: .vertical)
+                            .font(.system(.body, design: .monospaced))
+                            .lineLimit(6...15)
+                    }
                     #endif
                 }
 
@@ -119,15 +195,17 @@ struct CardEditorView: View {
                 if let card = card {
                     title = card.title
                     cardDescription = card.cardDescription
+                    branchName = card.branchName
                     status = card.status
                     selectedTags = Set(card.tags?.map(\.id) ?? [])
+                    branchManuallyEdited = !card.branchName.isEmpty
                 } else {
                     status = initialStatus
                 }
             }
         }
         #if os(macOS)
-        .frame(minWidth: 400, minHeight: 500)
+        .frame(minWidth: 450, minHeight: 550)
         #endif
     }
 
@@ -154,9 +232,9 @@ struct CardEditorView: View {
 
         targetCard.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         targetCard.cardDescription = cardDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        targetCard.branchName = branchName.trimmingCharacters(in: .whitespacesAndNewlines)
         targetCard.status = status
 
-        // Update tags
         let selectedTagObjects = allTags.filter { selectedTags.contains($0.id) }
         targetCard.tags = selectedTagObjects
 
