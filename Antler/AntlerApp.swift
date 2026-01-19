@@ -12,7 +12,8 @@ import SwiftData
 struct AntlerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Card.self,
+            Tag.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -28,5 +29,19 @@ struct AntlerApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+        #if os(macOS)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Card") {
+                    NotificationCenter.default.post(name: .newCard, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+        }
+        #endif
     }
+}
+
+extension Notification.Name {
+    static let newCard = Notification.Name("newCard")
 }
