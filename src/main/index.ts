@@ -80,8 +80,8 @@ ipcMain.handle("config:reload", (): Result<AntlerConfig, ConfigError> => {
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1280,
+    height: 720,
     show: !process.env.ELECTRON_E2E_TEST,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
