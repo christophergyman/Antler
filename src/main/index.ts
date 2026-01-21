@@ -5,6 +5,7 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    show: !process.env.ELECTRON_E2E_TEST,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,

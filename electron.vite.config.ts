@@ -16,7 +16,11 @@ export default defineConfig({
     build: {
       outDir: 'dist/preload',
       rollupOptions: {
-        input: 'src/preload/index.ts'
+        input: 'src/preload/index.ts',
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js'
+        }
       }
     }
   },
