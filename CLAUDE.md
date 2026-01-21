@@ -1,111 +1,51 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# CLAUDE.md
 
-Default to using Bun instead of Node.js.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+## Project Overview
 
-## APIs
+Antler is an Electron desktop application for managing parallel GitHub work sessions. Built with React 18, TypeScript, Tailwind CSS, and electron-vite.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Commands
 
-## Testing
+```bash
+# Install dependencies
+bun install
 
-Use `bun test` to run tests.
+# Development (hot reload)
+bun run dev
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+# Build
+bun run build
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+# E2E tests
+bun run test:e2e              # headless
+bun run test:e2e:headed       # visible browser
+bun run test:e2e:debug        # interactive debug
 ```
 
-## Frontend
+## Architecture
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+### Electron Three-Process Model
+- **Main process** (`src/main/`) - Node.js backend, window management, system APIs
+- **Preload** (`src/preload/`) - IPC bridge with context isolation
+- **Renderer** (`src/renderer/`) - React frontend
 
-Server:
+### Card System
+The core data structure is the `Card` - an immutable representation of a parallel work session:
 
-```ts#index.ts
-import index from "./index.html"
+- **Types** in `src/main/types/` - `Card`, `CardStatus`, `GitHubInfo`, `CIStatus`
+- **Operations** in `src/main/card.ts` - factory (`createCard`), updates (`updateCard`, `updateGitHub`), status helpers, serialization
+- **Collections** in `src/main/utils/collection.ts` - filtering, finding, batch ops, parallel operations (`mapParallel`, `filterParallel`)
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+All Card operations are **immutable** (return new objects via `Object.freeze`). Collection utilities are designed for **parallel-safe** processing.
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+### Build Output
+electron-vite compiles to `dist/` with separate folders for main, preload, and renderer. The `release/` folder contains distributable packages.
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+## Key Patterns
 
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-
-// import .css files directly and it works
-import './index.css';
-
-import { createRoot } from "react-dom/client";
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
+- Cards are immutable - always use update functions, never mutate directly
+- Use factory functions: `createCard()`, `createGitHubInfo()`
+- Parallel operations use `Promise.all`/`Promise.allSettled`
+- Context isolation enabled - renderer communicates via preload bridge only
