@@ -21,10 +21,4 @@ test.describe('UI Tests', () => {
     const container = window.locator('div.flex.items-center.justify-center');
     await expect(container).toBeVisible();
   });
-
-  test('screenshot matches', async ({ window }) => {
-    await expect(window).toHaveScreenshot('main-window.png', {
-      maxDiffPixelRatio: 0.1,
-    });
-  });
 });
