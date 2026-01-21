@@ -14,11 +14,6 @@ export function generateUid(): string {
   return randomUUID();
 }
 
-/**
- * Name generation state
- */
-let nameCounter = 0;
-
 const ADJECTIVES = [
   "swift", "bold", "keen", "calm", "bright",
   "quick", "sharp", "warm", "cool", "fresh",
@@ -33,19 +28,14 @@ const NOUNS = [
 
 /**
  * Generates a human-readable name for cards
- * Format: adjective-noun-counter (e.g., "swift-branch-42")
+ * Format: adjective-noun-prefix (e.g., "swift-branch-a1b2")
+ * Uses UUID prefix for uniqueness across sessions/windows
  */
-export function generateName(): string {
+export function generateName(uid?: string): string {
+  const prefix = uid ? uid.slice(0, 4) : randomUUID().slice(0, 4);
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  return `${adj}-${noun}-${++nameCounter}`;
-}
-
-/**
- * Resets the name counter (useful for testing)
- */
-export function resetNameCounter(): void {
-  nameCounter = 0;
+  return `${adj}-${noun}-${prefix}`;
 }
 
 /**

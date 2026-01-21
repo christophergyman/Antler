@@ -5,26 +5,56 @@
 
 import type { GitHubInfo } from "./types/github";
 import { createGitHubInfo, updateGitHubInfo } from "./types/github";
-import { generateUid, generateName } from "./utils/uid";
+import { generateUid, generateName, isValidUid } from "./utils/uid";
 
 // Re-export types for convenience
 export type { GitHubInfo, GitHubComment, GitHubPR, LinkedIssue } from "./types/github";
 export type { CIStatus } from "./types/ci";
+export type { Card, CardStatus } from "./types/card";
+
+// Import Card type for internal use
+import type { Card, CardStatus } from "./types/card";
 
 // ============================================================================
-// Card Types
+// Validation
 // ============================================================================
 
-export type CardStatus = "idle" | "active" | "paused" | "completed" | "error";
+const VALID_STATUSES: readonly CardStatus[] = ["idle", "active", "paused", "completed", "error"];
 
-export interface Card {
-  readonly name: string;
-  readonly sessionUid: string;
-  readonly status: CardStatus;
-  readonly worktreeCreated: boolean;
-  readonly github: GitHubInfo;
-  readonly createdAt: string;
-  readonly updatedAt: string;
+function validateCardObject(obj: unknown): asserts obj is Record<string, unknown> {
+  if (!obj || typeof obj !== "object") {
+    throw new Error("Invalid card: expected object");
+  }
+
+  const o = obj as Record<string, unknown>;
+
+  if (typeof o.name !== "string" || o.name.length === 0) {
+    throw new Error("Invalid card: name must be a non-empty string");
+  }
+
+  if (typeof o.sessionUid !== "string" || !isValidUid(o.sessionUid)) {
+    throw new Error("Invalid card: sessionUid must be a valid UUID v4");
+  }
+
+  if (typeof o.status !== "string" || !VALID_STATUSES.includes(o.status as CardStatus)) {
+    throw new Error(`Invalid card: status must be one of ${VALID_STATUSES.join("|")}`);
+  }
+
+  if (typeof o.worktreeCreated !== "boolean") {
+    throw new Error("Invalid card: worktreeCreated must be a boolean");
+  }
+
+  if (!o.github || typeof o.github !== "object") {
+    throw new Error("Invalid card: github must be an object");
+  }
+
+  if (typeof o.createdAt !== "string") {
+    throw new Error("Invalid card: createdAt must be an ISO timestamp string");
+  }
+
+  if (typeof o.updatedAt !== "string") {
+    throw new Error("Invalid card: updatedAt must be an ISO timestamp string");
+  }
 }
 
 // ============================================================================
@@ -40,9 +70,10 @@ export interface CreateCardOptions {
 
 export function createCard(options: CreateCardOptions = {}): Card {
   const now = new Date().toISOString();
+  const uid = generateUid();
   return Object.freeze({
-    name: options.name ?? generateName(),
-    sessionUid: generateUid(),
+    name: options.name ?? generateName(uid),
+    sessionUid: uid,
     status: options.status ?? "idle",
     worktreeCreated: options.worktreeCreated ?? false,
     github: createGitHubInfo(options.github),
@@ -134,6 +165,10 @@ export function isIdle(card: Card): boolean {
   return card.status === "idle";
 }
 
+export function isPaused(card: Card): boolean {
+  return card.status === "paused";
+}
+
 export function isCompleted(card: Card): boolean {
   return card.status === "completed";
 }
@@ -163,15 +198,17 @@ export function toJSON(card: Card): string {
 }
 
 export function fromJSON(json: string): Card {
-  const parsed = JSON.parse(json);
+  const parsed: unknown = JSON.parse(json);
+  validateCardObject(parsed);
+
   return Object.freeze({
-    name: parsed.name,
-    sessionUid: parsed.sessionUid,
-    status: parsed.status,
-    worktreeCreated: parsed.worktreeCreated,
-    github: createGitHubInfo(parsed.github),
-    createdAt: parsed.createdAt,
-    updatedAt: parsed.updatedAt,
+    name: parsed.name as string,
+    sessionUid: parsed.sessionUid as string,
+    status: parsed.status as CardStatus,
+    worktreeCreated: parsed.worktreeCreated as boolean,
+    github: createGitHubInfo(parsed.github as Partial<GitHubInfo>),
+    createdAt: parsed.createdAt as string,
+    updatedAt: parsed.updatedAt as string,
   });
 }
 
@@ -180,6 +217,27 @@ export function toJSONArray(cards: readonly Card[]): string {
 }
 
 export function fromJSONArray(json: string): Card[] {
-  const parsed = JSON.parse(json);
-  return parsed.map((item: unknown) => fromJSON(JSON.stringify(item)));
+  const parsed: unknown = JSON.parse(json);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Invalid cards: expected array");
+  }
+
+  return parsed.map((item: unknown, index: number) => {
+    try {
+      validateCardObject(item);
+      return Object.freeze({
+        name: item.name as string,
+        sessionUid: item.sessionUid as string,
+        status: item.status as CardStatus,
+        worktreeCreated: item.worktreeCreated as boolean,
+        github: createGitHubInfo(item.github as Partial<GitHubInfo>),
+        createdAt: item.createdAt as string,
+        updatedAt: item.updatedAt as string,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Invalid card at index ${index}: ${message}`);
+    }
+  });
 }

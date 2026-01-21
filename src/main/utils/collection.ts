@@ -3,7 +3,7 @@
  * Pure functions for parallel-safe operations on Card arrays
  */
 
-import type { Card, CardStatus } from "../card";
+import type { Card, CardStatus } from "../types/card";
 
 // ============================================================================
 // Filtering
@@ -23,6 +23,10 @@ export function filterIdle(cards: readonly Card[]): Card[] {
 
 export function filterCompleted(cards: readonly Card[]): Card[] {
   return filterByStatus(cards, "completed");
+}
+
+export function filterPaused(cards: readonly Card[]): Card[] {
+  return filterByStatus(cards, "paused");
 }
 
 export function filterWithWorktree(cards: readonly Card[]): Card[] {
@@ -146,16 +150,19 @@ export async function forEachParallel(
 }
 
 // ============================================================================
-// Sorting
+// Sorting (optimized with cached timestamps)
 // ============================================================================
 
 export function sortByCreated(
   cards: readonly Card[],
   order: "asc" | "desc" = "desc"
 ): Card[] {
-  const sorted = [...cards].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
+  const withTime = cards.map((card) => ({
+    card,
+    time: new Date(card.createdAt).getTime(),
+  }));
+  withTime.sort((a, b) => a.time - b.time);
+  const sorted = withTime.map((x) => x.card);
   return order === "desc" ? sorted.reverse() : sorted;
 }
 
@@ -163,9 +170,12 @@ export function sortByUpdated(
   cards: readonly Card[],
   order: "asc" | "desc" = "desc"
 ): Card[] {
-  const sorted = [...cards].sort(
-    (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-  );
+  const withTime = cards.map((card) => ({
+    card,
+    time: new Date(card.updatedAt).getTime(),
+  }));
+  withTime.sort((a, b) => a.time - b.time);
+  const sorted = withTime.map((x) => x.card);
   return order === "desc" ? sorted.reverse() : sorted;
 }
 
