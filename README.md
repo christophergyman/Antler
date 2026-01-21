@@ -91,6 +91,16 @@ e2e/
 | `test:e2e:headed` | `bun run test:e2e:headed` | Run E2E tests with visible browser |
 | `test:e2e:debug` | `bun run test:e2e:debug` | Run E2E tests in debug mode |
 
+## Manual Testing
+
+To test IPC calls, open DevTools in the Electron window (Cmd+Option+I) and run in the console:
+
+```javascript
+await window.electron.fetchGitHubIssues()  // Fetch issues from configured repo
+await window.electron.getCards()            // Get current cards
+await window.electron.reloadConfig()        // Reload antler.yaml config
+```
+
 ## Configuration
 
 | File | Purpose |
@@ -100,3 +110,4 @@ e2e/
 | `postcss.config.js` | PostCSS configuration |
 | `tsconfig.json` | TypeScript configuration |
 | `e2e/playwright.config.ts` | Playwright E2E test configuration |
+| `antler.yaml` | Local config (create from `antler.example.yaml`) |
