@@ -47,3 +47,6 @@ release
 # Playwright
 playwright-report
 test-results
+
+# Local config (use antler.example.yaml as template)
+antler.yaml
