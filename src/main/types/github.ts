@@ -3,7 +3,8 @@
  * Comprehensive types for GitHub issues, PRs, comments, and relationships
  */
 
-import { CIStatus, createCIStatus } from "./ci";
+import type { CIStatus } from "./ci";
+import { createCIStatus } from "./ci";
 
 // ============================================================================
 // State Types

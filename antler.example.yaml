@@ -1,0 +1,7 @@
+# Antler Configuration
+# Copy this file to antler.yaml and update with your repository
+
+github:
+  # The GitHub repository to fetch issues from
+  # Format: owner/repo (e.g., "facebook/react")
+  repository: owner/repo

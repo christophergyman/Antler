@@ -5,3 +5,4 @@
 export * from "./ci";
 export * from "./github";
 export * from "./card";
+export * from "./result";
