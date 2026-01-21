@@ -1,18 +1,23 @@
 import { app, BrowserWindow } from "electron";
-import path from "path";
+import { join } from "path";
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  // Load from Vite dev server during development, file in production
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  } else {
+    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+  }
 }
 
 app.whenReady().then(() => {
