@@ -1,5 +1,5 @@
 /**
- * Utility exports
+ * Utils exports
  */
 
 export * from "./uid";

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Antler is an Electron desktop application for managing parallel GitHub work sessions. Built with React 18, TypeScript, Tailwind CSS, and electron-vite.
+Antler is a Tauri v2 desktop application for managing parallel GitHub work sessions. Built with React 18, TypeScript, Tailwind CSS, and a minimal Rust backend.
 
 ## Commands
 
@@ -26,26 +26,32 @@ bun run test:e2e:debug        # interactive debug
 
 ## Architecture
 
-### Electron Three-Process Model
-- **Main process** (`src/main/`) - Node.js backend, window management, system APIs
-- **Preload** (`src/preload/`) - IPC bridge with context isolation
-- **Renderer** (`src/renderer/`) - React frontend
+### Tauri Two-Tier Model
+- **WebView (Frontend)** - React app with all business logic in TypeScript
+- **Rust Backend** (`src-tauri/`) - Minimal plugin host for shell and filesystem access
+
+### Directory Structure
+- **src/core/** - Shared TypeScript (Card types, operations, utilities)
+- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts)
+- **src/renderer/** - React components and hooks
+- **src-tauri/** - Minimal Rust backend (plugin registration only)
 
 ### Card System
 The core data structure is the `Card` - an immutable representation of a parallel work session:
 
-- **Types** in `src/main/types/` - `Card`, `CardStatus`, `GitHubInfo`, `CIStatus`
-- **Operations** in `src/main/card.ts` - factory (`createCard`), updates (`updateCard`, `updateGitHub`), status helpers, serialization
-- **Collections** in `src/main/utils/collection.ts` - filtering, finding, batch ops, parallel operations (`mapParallel`, `filterParallel`)
+- **Types** in `src/core/types/` - `Card`, `CardStatus`, `GitHubInfo`, `CIStatus`
+- **Operations** in `src/core/card.ts` - factory (`createCard`), updates (`updateCard`, `updateGitHub`), status helpers, serialization
+- **Collections** in `src/core/utils/collection.ts` - filtering, finding, batch ops, parallel operations (`mapParallel`, `filterParallel`)
 
 All Card operations are **immutable** (return new objects via `Object.freeze`). Collection utilities are designed for **parallel-safe** processing.
 
 ### Build Output
-electron-vite compiles to `dist/` with separate folders for main, preload, and renderer. The `release/` folder contains distributable packages.
+Vite compiles frontend to `dist/`. Tauri builds platform-specific binaries to `src-tauri/target/`.
 
 ## Key Patterns
 
 - Cards are immutable - always use update functions, never mutate directly
 - Use factory functions: `createCard()`, `createGitHubInfo()`
 - Parallel operations use `Promise.all`/`Promise.allSettled`
-- Context isolation enabled - renderer communicates via preload bridge only
+- Services use Tauri plugins (`@tauri-apps/plugin-shell`, `@tauri-apps/plugin-fs`)
+- Path aliases: `@core/*` for core module, `@services/*` for services

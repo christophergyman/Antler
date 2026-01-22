@@ -1,4 +1,4 @@
-import type { CardStatus } from '../../main/types/card';
+import type { CardStatus } from '@core/types/card';
 import type { StatusType } from '../constants/status';
 
 export function mapCardStatusToStatusType(status: CardStatus): StatusType {

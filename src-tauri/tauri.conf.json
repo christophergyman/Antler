@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Antler",
+  "version": "1.0.0",
+  "identifier": "com.antler.app",
+  "build": {
+    "beforeDevCommand": "bun run vite:dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run vite:build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Antler",
+        "width": 1280,
+        "height": 720,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "shell": {
+      "scope": [
+        {
+          "name": "gh",
+          "cmd": "gh",
+          "args": true
+        }
+      ]
+    }
+  }
+}

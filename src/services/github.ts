@@ -1,14 +1,14 @@
 /**
  * GitHub CLI Service
- * Fetches issues and PRs via the `gh` CLI
+ * Fetches issues and PRs via the `gh` CLI using Tauri shell plugin
  */
 
-import { spawn } from "child_process";
-import type { GitHubResult } from "../types/result";
-import { ok, err, createGitHubError } from "../types/result";
-import type { GitHubInfo, GitHubComment, GitHubPR } from "../types/github";
-import { createGitHubInfo, createGitHubComment, createGitHubPR } from "../types/github";
-import { createCIStatus } from "../types/ci";
+import { Command } from "@tauri-apps/plugin-shell";
+import type { GitHubResult } from "@core/types/result";
+import { ok, err, createGitHubError } from "@core/types/result";
+import type { GitHubInfo, GitHubComment, GitHubPR } from "@core/types/github";
+import { createGitHubInfo, createGitHubComment, createGitHubPR } from "@core/types/github";
+import { createCIStatus } from "@core/types/ci";
 
 // ============================================================================
 // Constants
@@ -78,15 +78,13 @@ interface RawPR {
 // Command Execution
 // ============================================================================
 
-function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubResult<string>> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const proc = spawn("gh", args);
+async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubResult<string>> {
+  try {
+    const command = Command.create("gh", args);
 
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        proc.kill();
+    // Create a timeout promise
+    const timeoutPromise = new Promise<GitHubResult<string>>((resolve) => {
+      setTimeout(() => {
         resolve(
           err(
             createGitHubError(
@@ -96,88 +94,71 @@ function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubR
             )
           )
         );
+      }, timeoutMs);
+    });
+
+    // Execute command with timeout
+    const executePromise = (async (): Promise<GitHubResult<string>> => {
+      const result = await command.execute();
+
+      if (result.code === 0) {
+        return ok(result.stdout);
       }
-    }, timeoutMs);
 
-    let stdout = "";
-    let stderr = "";
+      const stderr = result.stderr;
 
-    proc.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    proc.on("error", (error) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeout);
-
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        resolve(
-          err(
-            createGitHubError(
-              "gh_not_installed",
-              "GitHub CLI not installed",
-              "Install from https://cli.github.com"
-            )
-          )
-        );
-      } else {
-        resolve(
-          err(
-            createGitHubError("command_failed", "Failed to execute gh command", error.message)
+      if (stderr.includes("not logged in") || stderr.includes("auth login")) {
+        return err(
+          createGitHubError(
+            "not_authenticated",
+            "Not logged in to GitHub",
+            "Run `gh auth login` to authenticate"
           )
         );
       }
-    });
 
-    proc.on("close", (code) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeout);
-
-      if (code === 0) {
-        resolve(ok(stdout));
-      } else if (stderr.includes("not logged in") || stderr.includes("auth login")) {
-        resolve(
-          err(
-            createGitHubError(
-              "not_authenticated",
-              "Not logged in to GitHub",
-              "Run `gh auth login` to authenticate"
-            )
-          )
-        );
-      } else if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
-        resolve(
-          err(
-            createGitHubError(
-              "repo_not_found",
-              "Repository not found or inaccessible",
-              stderr.trim()
-            )
-          )
-        );
-      } else if (stderr.includes("connect") || stderr.includes("network")) {
-        resolve(
-          err(createGitHubError("network_error", "Network error", stderr.trim()))
-        );
-      } else {
-        resolve(
-          err(
-            createGitHubError(
-              "command_failed",
-              `gh command failed with exit code ${code}`,
-              stderr.trim()
-            )
+      if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
+        return err(
+          createGitHubError(
+            "repo_not_found",
+            "Repository not found or inaccessible",
+            stderr.trim()
           )
         );
       }
-    });
-  });
+
+      if (stderr.includes("connect") || stderr.includes("network")) {
+        return err(createGitHubError("network_error", "Network error", stderr.trim()));
+      }
+
+      return err(
+        createGitHubError(
+          "command_failed",
+          `gh command failed with exit code ${result.code}`,
+          stderr.trim()
+        )
+      );
+    })();
+
+    return Promise.race([executePromise, timeoutPromise]);
+  } catch (error) {
+    // Handle case where gh CLI is not installed
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
+      return err(
+        createGitHubError(
+          "gh_not_installed",
+          "GitHub CLI not installed",
+          "Install from https://cli.github.com"
+        )
+      );
+    }
+
+    return err(
+      createGitHubError("command_failed", "Failed to execute gh command", errorMessage)
+    );
+  }
 }
 
 // ============================================================================
@@ -257,7 +238,9 @@ export async function fetchIssues(
     );
   }
 
-  const [owner, name] = repo.split("/");
+  const parts = repo.split("/");
+  const owner = parts[0] ?? "";
+  const name = parts[1] ?? "";
   const githubInfos = issues.map((issue) => mapIssueToGitHubInfo(issue, owner, name));
 
   return ok(githubInfos);
@@ -374,11 +357,12 @@ export async function fetchLinkedPR(
     );
   }
 
-  if (prs.length === 0) {
+  const firstPR = prs[0];
+  if (!firstPR) {
     return ok(null);
   }
 
-  return ok(mapPR(prs[0]));
+  return ok(mapPR(firstPR));
 }
 
 // ============================================================================
