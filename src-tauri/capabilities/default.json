@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "Default capability for Antler app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "run-gh",
+          "cmd": "gh",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-pwd",
+          "cmd": "pwd",
+          "args": false,
+          "sidecar": false
+        }
+      ]
+    },
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    "fs:default",
+    "fs:allow-read",
+    "fs:allow-exists",
+    "fs:read-all",
+    "core:path:default"
+  ]
+}

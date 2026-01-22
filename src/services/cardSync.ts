@@ -3,10 +3,10 @@
  * Merges fetched GitHub issues with existing Cards
  */
 
-import type { Card } from "../types/card";
-import type { GitHubInfo } from "../types/github";
-import { createCard, updateGitHub } from "../card";
-import { findByIssueNumber } from "../utils/collection";
+import type { Card } from "@core/types/card";
+import type { GitHubInfo } from "@core/types/github";
+import { createCard, updateGitHub } from "@core/card";
+import { findByIssueNumber } from "@core/utils/collection";
 
 // ============================================================================
 // Types

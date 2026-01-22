@@ -41,8 +41,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .claude
 .mcp.json
 
-# Electron build output
-release
+# Tauri build output
+src-tauri/target
 
 # Playwright
 playwright-report

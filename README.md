@@ -1,23 +1,26 @@
 # Antler
 
-A modern Electron desktop application built with React, TypeScript, Tailwind CSS, and Bun.
+A modern Tauri v2 desktop application for managing parallel GitHub work sessions. Built with React, TypeScript, Tailwind CSS, and a minimal Rust backend.
 
 ## Tech Stack
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Electron | 33 | Desktop application framework |
+| Tauri | 2 | Lightweight desktop application framework |
 | React | 18 | UI library |
 | TypeScript | 5 | Type-safe JavaScript |
 | Tailwind CSS | 3 | Utility-first CSS framework |
 | Bun | latest | JavaScript runtime & package manager |
-| electron-vite | 5 | Build tooling for Electron |
+| Vite | 7 | Frontend build tooling |
+| Rust | stable | Minimal backend (plugin hosting) |
 | Playwright | 1.57 | E2E testing framework |
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) - Fast JavaScript runtime and package manager
+- [Rust](https://rustup.rs) - Required for Tauri backend compilation
 - Git
+- [GitHub CLI](https://cli.github.com) (`gh`) - For fetching issues and PRs
 
 ## Installation
 
@@ -25,6 +28,21 @@ A modern Electron desktop application built with React, TypeScript, Tailwind CSS
 git clone https://github.com/christophergyman/Antler.git
 cd Antler
 bun install
+```
+
+## Configuration
+
+Create `antler.yaml` in the project root (use `antler.example.yaml` as a template):
+
+```yaml
+github:
+  repository: owner/repo-name
+```
+
+Make sure you're authenticated with GitHub CLI:
+
+```bash
+gh auth login
 ```
 
 ## Development
@@ -35,23 +53,16 @@ Start the development server with hot reload:
 bun run dev
 ```
 
+This runs both the Vite dev server and the Tauri application. First run will compile Rust dependencies (takes a few minutes), subsequent runs are fast.
+
 ## Building
 
 ```bash
-# Build for development/testing
+# Build for production
 bun run build
-
-# Preview the production build
-bun run preview
-
-# Create distributable packages
-bun run package
 ```
 
-The `package` command creates platform-specific distributables:
-- **macOS:** DMG and ZIP
-- **Windows:** NSIS installer and ZIP
-- **Linux:** AppImage and DEB
+This creates platform-specific binaries in `src-tauri/target/release/`.
 
 ## E2E Testing
 
@@ -66,48 +77,88 @@ bun run test:e2e:headed
 bun run test:e2e:debug
 ```
 
+## Architecture
+
+Antler uses Tauri's two-tier architecture with all business logic in TypeScript:
+
+```
+┌─────────────────────────────────────┐
+│        WebView (Frontend)           │
+│ ┌─────────────────────────────────┐ │
+│ │   React App + TypeScript        │ │
+│ │   - src/core/      (types, ops) │ │
+│ │   - src/services/  (github, fs) │ │
+│ │   - src/renderer/  (components) │ │
+│ └─────────────────────────────────┘ │
+│              │                      │
+│    Tauri JS Plugins                 │
+│    (@tauri-apps/plugin-shell)       │
+│    (@tauri-apps/plugin-fs)          │
+└─────────────────────────────────────┘
+               │
+┌─────────────────────────────────────┐
+│      Rust Backend (minimal)         │
+│      - Plugin hosting only          │
+│      - ~10 lines of code            │
+└─────────────────────────────────────┘
+```
+
 ## Project Structure
 
 ```
 src/
-├── main/          # Electron main process
-├── preload/       # Preload scripts (IPC bridge)
-└── renderer/      # React application
+├── core/           # Shared TypeScript (types, card operations, utilities)
+│   ├── card.ts     # Card factory & immutable operations
+│   ├── types/      # Card, GitHubInfo, CIStatus, Result types
+│   └── utils/      # Collection utilities, UID generation
+├── services/       # Frontend services using Tauri plugins
+│   ├── github.ts   # GitHub CLI wrapper (@tauri-apps/plugin-shell)
+│   ├── config.ts   # Config loader (@tauri-apps/plugin-fs)
+│   └── cardSync.ts # Card sync logic
+└── renderer/       # React application
+    ├── components/ # UI components
+    ├── hooks/      # React hooks (useCards)
+    └── utils/      # Frontend utilities
+
+src-tauri/          # Minimal Rust backend
+├── src/            # ~10 lines: plugin registration
+├── Cargo.toml      # Rust dependencies
+├── tauri.conf.json # Tauri configuration
+└── capabilities/   # Permission definitions
 
 e2e/
-├── fixtures/      # Playwright test fixtures
-└── tests/         # E2E test files
+├── fixtures/       # Playwright test fixtures
+└── tests/          # E2E test files
 ```
 
 ## Scripts Reference
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| `dev` | `bun run dev` | Start development server with hot reload |
-| `build` | `bun run build` | Build the application |
-| `preview` | `bun run preview` | Preview the built application |
-| `package` | `bun run package` | Build and package for distribution |
+| `dev` | `bun run dev` | Start Tauri development with hot reload |
+| `build` | `bun run build` | Build production application |
+| `vite:dev` | `bun run vite:dev` | Start Vite dev server only |
+| `vite:build` | `bun run vite:build` | Build frontend only |
 | `test:e2e` | `bun run test:e2e` | Run E2E tests headless |
 | `test:e2e:headed` | `bun run test:e2e:headed` | Run E2E tests with visible browser |
 | `test:e2e:debug` | `bun run test:e2e:debug` | Run E2E tests in debug mode |
 
-## Manual Testing
-
-To test IPC calls, open DevTools in the Electron window (Cmd+Option+I) and run in the console:
-
-```javascript
-await window.electron.fetchGitHubIssues()  // Fetch issues from configured repo
-await window.electron.getCards()            // Get current cards
-await window.electron.reloadConfig()        // Reload antler.yaml config
-```
-
-## Configuration
+## Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `electron.vite.config.ts` | electron-vite build configuration |
+| `vite.config.ts` | Vite build configuration with path aliases |
+| `src-tauri/tauri.conf.json` | Tauri app configuration |
+| `src-tauri/capabilities/default.json` | Tauri permission definitions |
 | `tailwind.config.js` | Tailwind CSS configuration |
 | `postcss.config.js` | PostCSS configuration |
-| `tsconfig.json` | TypeScript configuration |
+| `tsconfig.json` | TypeScript configuration with path aliases |
 | `e2e/playwright.config.ts` | Playwright E2E test configuration |
 | `antler.yaml` | Local config (create from `antler.example.yaml`) |
+
+## Key Patterns
+
+- **Immutable Cards**: All card operations return new frozen objects
+- **Result Types**: Type-safe error handling with `Result<T, E>`
+- **Path Aliases**: Use `@core/*` and `@services/*` for clean imports
+- **Parallel Operations**: Collection utilities support `Promise.all`/`Promise.allSettled`

@@ -1,17 +1,16 @@
 /**
  * Secure UID Generation
  * Uses crypto.randomUUID() for cryptographically secure identifiers
+ * Browser-compatible (no Node.js imports needed)
  */
-
-import { randomUUID } from "crypto";
 
 /**
  * Generates a cryptographically secure UUID v4
  * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
- * 122 bits of entropy, collision probability ~1 in 5.3×10^36
+ * 122 bits of entropy, collision probability ~1 in 5.3x10^36
  */
 export function generateUid(): string {
-  return randomUUID();
+  return crypto.randomUUID();
 }
 
 const ADJECTIVES = [
@@ -32,7 +31,7 @@ const NOUNS = [
  * Uses UUID prefix for uniqueness across sessions/windows
  */
 export function generateName(uid?: string): string {
-  const prefix = uid ? uid.slice(0, 4) : randomUUID().slice(0, 4);
+  const prefix = uid ? uid.slice(0, 4) : crypto.randomUUID().slice(0, 4);
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
   return `${adj}-${noun}-${prefix}`;

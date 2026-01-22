@@ -22,7 +22,12 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "types": ["node", "bun"]
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["src/core/*"],
+      "@services/*": ["src/services/*"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src-tauri/**/*"]
 }
