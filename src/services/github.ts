@@ -80,67 +80,84 @@ interface RawPR {
 
 async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubResult<string>> {
   try {
-    const command = Command.create("gh", args);
+    const command = Command.create("run-gh", args);
+    const child = await command.spawn();
 
-    // Create a timeout promise
-    const timeoutPromise = new Promise<GitHubResult<string>>((resolve) => {
-      setTimeout(() => {
-        resolve(
-          err(
-            createGitHubError(
-              "command_failed",
-              "Command timed out",
-              `gh ${args.slice(0, 3).join(" ")}... exceeded ${timeoutMs}ms`
-            )
-          )
-        );
-      }, timeoutMs);
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    // Set up timeout to kill the process
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, timeoutMs);
+
+    // Collect output from stdout/stderr
+    child.stdout.on("data", (data) => {
+      stdout += data;
+    });
+    child.stderr.on("data", (data) => {
+      stderr += data;
     });
 
-    // Execute command with timeout
-    const executePromise = (async (): Promise<GitHubResult<string>> => {
-      const result = await command.execute();
+    // Wait for process to exit
+    const status = await new Promise<number | null>((resolve) => {
+      child.on("close", (data) => resolve(data.code));
+      child.on("error", () => resolve(null));
+    });
 
-      if (result.code === 0) {
-        return ok(result.stdout);
-      }
+    // Clear timeout if command completed
+    clearTimeout(timeoutId);
 
-      const stderr = result.stderr;
-
-      if (stderr.includes("not logged in") || stderr.includes("auth login")) {
-        return err(
-          createGitHubError(
-            "not_authenticated",
-            "Not logged in to GitHub",
-            "Run `gh auth login` to authenticate"
-          )
-        );
-      }
-
-      if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
-        return err(
-          createGitHubError(
-            "repo_not_found",
-            "Repository not found or inaccessible",
-            stderr.trim()
-          )
-        );
-      }
-
-      if (stderr.includes("connect") || stderr.includes("network")) {
-        return err(createGitHubError("network_error", "Network error", stderr.trim()));
-      }
-
+    // Handle timeout case
+    if (timedOut) {
       return err(
         createGitHubError(
           "command_failed",
-          `gh command failed with exit code ${result.code}`,
+          "Command timed out",
+          `gh ${args.slice(0, 3).join(" ")}... exceeded ${timeoutMs}ms`
+        )
+      );
+    }
+
+    // Handle success
+    if (status === 0) {
+      return ok(stdout);
+    }
+
+    // Handle errors
+    if (stderr.includes("not logged in") || stderr.includes("auth login")) {
+      return err(
+        createGitHubError(
+          "not_authenticated",
+          "Not logged in to GitHub",
+          "Run `gh auth login` to authenticate"
+        )
+      );
+    }
+
+    if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
+      return err(
+        createGitHubError(
+          "repo_not_found",
+          "Repository not found or inaccessible",
           stderr.trim()
         )
       );
-    })();
+    }
 
-    return Promise.race([executePromise, timeoutPromise]);
+    if (stderr.includes("connect") || stderr.includes("network")) {
+      return err(createGitHubError("network_error", "Network error", stderr.trim()));
+    }
+
+    return err(
+      createGitHubError(
+        "command_failed",
+        `gh command failed with exit code ${status}`,
+        stderr.trim()
+      )
+    );
   } catch (error) {
     // Handle case where gh CLI is not installed
     const errorMessage = error instanceof Error ? error.message : String(error);

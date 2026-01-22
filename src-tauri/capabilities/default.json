@@ -5,10 +5,29 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "run-gh",
+          "cmd": "gh",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-pwd",
+          "cmd": "pwd",
+          "args": false,
+          "sidecar": false
+        }
+      ]
+    },
+    "shell:allow-spawn",
+    "shell:allow-kill",
     "fs:default",
     "fs:allow-read",
     "fs:allow-exists",
-    "path:default"
+    "fs:read-all",
+    "core:path:default"
   ]
 }

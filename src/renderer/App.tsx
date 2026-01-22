@@ -14,8 +14,29 @@ function ActionButton({ onClick, children }: { onClick: () => void; children: Re
   );
 }
 
+function SetupGuide({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
+      <div className="bg-white p-8 rounded-lg shadow-md max-w-md">
+        <h1 className="text-xl font-semibold text-gray-800 mb-4">Setup Required</h1>
+        <p className="text-gray-600 mb-4">
+          Create <code className="bg-gray-200 px-1.5 py-0.5 rounded text-sm">antler.yaml</code> in the project root:
+        </p>
+        <pre className="bg-gray-900 text-gray-100 p-4 rounded mb-6 text-sm overflow-x-auto">
+{`github:
+  repository: owner/repo`}
+        </pre>
+        <p className="text-gray-500 text-sm mb-4">
+          Replace <code className="bg-gray-200 px-1 rounded">owner/repo</code> with your GitHub repository (e.g., <code className="bg-gray-200 px-1 rounded">facebook/react</code>).
+        </p>
+        <ActionButton onClick={onRetry}>Retry</ActionButton>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { cards, isLoading, isRefreshing, error, refresh } = useCards();
+  const { cards, isLoading, isRefreshing, error, errorCode, refresh } = useCards();
 
   if (isLoading) {
     return (
@@ -23,6 +44,10 @@ export default function App() {
         <div className="text-gray-600">Loading issues...</div>
       </div>
     );
+  }
+
+  if (errorCode === 'config_not_found') {
+    return <SetupGuide onRetry={refresh} />;
   }
 
   if (error && cards.length === 0) {

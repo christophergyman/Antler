@@ -10,6 +10,7 @@ interface UseCardsReturn {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  errorCode: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -25,6 +26,7 @@ function formatError(error: FetchError): string {
 export function useCards(): UseCardsReturn {
   const [cards, setCards] = useState<Card[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasFetched = useRef(false);
@@ -38,12 +40,14 @@ export function useCards(): UseCardsReturn {
       setIsRefreshing(true);
     }
     setError(null);
+    setErrorCode(null);
 
     try {
       // Load config
       const configResult = await getCachedConfig();
       if (!configResult.ok) {
         setError(formatError(configResult.error));
+        setErrorCode(configResult.error.code);
         return;
       }
 
@@ -51,6 +55,7 @@ export function useCards(): UseCardsReturn {
       const issuesResult = await fetchIssuesWithPRs(configResult.value.github.repository);
       if (!issuesResult.ok) {
         setError(formatError(issuesResult.error));
+        setErrorCode(issuesResult.error.code);
         return;
       }
 
@@ -71,5 +76,5 @@ export function useCards(): UseCardsReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { cards, isLoading, isRefreshing, error, refresh: fetchCards };
+  return { cards, isLoading, isRefreshing, error, errorCode, refresh: fetchCards };
 }

@@ -24,15 +24,5 @@
       "csp": null
     }
   },
-  "plugins": {
-    "shell": {
-      "scope": [
-        {
-          "name": "gh",
-          "cmd": "gh",
-          "args": true
-        }
-      ]
-    }
-  }
+  "plugins": {}
 }

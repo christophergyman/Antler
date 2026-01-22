@@ -4,7 +4,7 @@
  */
 
 import { readTextFile, exists } from "@tauri-apps/plugin-fs";
-import { BaseDirectory } from "@tauri-apps/api/path";
+import { Command } from "@tauri-apps/plugin-shell";
 import { load } from "js-yaml";
 import type { ConfigResult } from "@core/types/result";
 import { ok, err, createConfigError } from "@core/types/result";
@@ -78,17 +78,28 @@ function validateConfig(raw: unknown): ConfigResult<AntlerConfig> {
 const CONFIG_FILENAME = "antler.yaml";
 
 /**
+ * Get current working directory via shell command
+ */
+async function getCurrentDir(): Promise<string> {
+  const command = Command.create("run-pwd");
+  const output = await command.execute();
+  if (output.code !== 0) {
+    throw new Error(`Failed to get cwd: ${output.stderr}`);
+  }
+  return output.stdout.trim();
+}
+
+/**
  * Load config from current working directory
- * In Tauri, we use the App directory or Resource directory depending on context
+ * Uses the directory where the app was launched (project root in typical usage)
  */
 export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
-  // Try loading from current working directory (Resource in Tauri context)
-  // For development, this will be the project root
-  const configPath = CONFIG_FILENAME;
-
   try {
-    // Check if file exists in Resource directory (project root during dev)
-    const fileExists = await exists(configPath, { baseDir: BaseDirectory.Resource });
+    // Use current working directory - where the app was launched from
+    const cwd = await getCurrentDir();
+    const configPath = `${cwd}/${CONFIG_FILENAME}`;
+
+    const fileExists = await exists(configPath);
 
     if (!fileExists) {
       return err(
@@ -100,7 +111,7 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
       );
     }
 
-    const fileContent = await readTextFile(configPath, { baseDir: BaseDirectory.Resource });
+    const fileContent = await readTextFile(configPath);
 
     let parsed: unknown;
     try {
