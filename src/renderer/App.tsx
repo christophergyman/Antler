@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { KanbanCard } from './components/KanbanCard';
+import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
-import { mapCardStatusToStatusType } from './utils/statusMapping';
+import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
 
 function ActionButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
@@ -48,7 +48,7 @@ function Header({
   onRefresh: () => void;
 }) {
   return (
-    <div className="p-6 flex items-center justify-between">
+    <div className="p-6 flex items-center justify-between shrink-0">
       <Toggle
         pressed={isMock}
         onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
@@ -63,7 +63,8 @@ function Header({
 
 export default function App() {
   const { dataSource, setDataSource, isMock } = useDataSource();
-  const { cards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
+  const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
+  const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
 
   const renderContent = () => {
     if (isLoading) {
@@ -87,43 +88,25 @@ export default function App() {
       );
     }
 
-    if (cards.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4">
-          <div className="text-gray-600">No issues found</div>
-        </div>
-      );
-    }
-
     return (
-      <div className="px-6 pb-6">
+      <>
         {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center justify-between">
+          <div className="mx-6 mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center justify-between shrink-0">
             <span>Refresh failed: {error}</span>
             <ActionButton onClick={refresh}>Retry</ActionButton>
           </div>
         )}
         {isRefreshing && (
-          <div className="mb-4 text-gray-500 text-sm">Refreshing...</div>
+          <div className="mx-6 mb-4 text-gray-500 text-sm shrink-0">Refreshing...</div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {cards.map((card) => (
-            <KanbanCard
-              key={card.sessionUid}
-              title={card.github.title}
-              description={card.github.body}
-              status={mapCardStatusToStatusType(card.status)}
-              labels={card.github.labels}
-            />
-          ))}
-        </div>
-      </div>
+        <KanbanBoard cards={cards} onCardStatusChange={handleCardStatusChange} />
+      </>
     );
   };
 
   return (
     <DotBackground>
-      <div className="min-h-screen flex flex-col">
+      <div className="h-screen flex flex-col overflow-hidden">
         <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} />
         {renderContent()}
       </div>
