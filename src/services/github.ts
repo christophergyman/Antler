@@ -9,6 +9,7 @@ import { ok, err, createGitHubError } from "@core/types/result";
 import type { GitHubInfo, GitHubComment, GitHubPR } from "@core/types/github";
 import { createGitHubInfo, createGitHubComment, createGitHubPR } from "@core/types/github";
 import { createCIStatus } from "@core/types/ci";
+import { logDataSync } from "./logging";
 
 // ============================================================================
 // Constants
@@ -79,6 +80,9 @@ interface RawPR {
 // ============================================================================
 
 async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubResult<string>> {
+  const commandPreview = `gh ${args.slice(0, 4).join(" ")}${args.length > 4 ? "..." : ""}`;
+  logDataSync("debug", `Executing: ${commandPreview}`);
+
   try {
     const command = Command.create("run-gh", args);
     const child = await command.spawn();
@@ -112,6 +116,7 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
 
     // Handle timeout case
     if (timedOut) {
+      logDataSync("error", "Command timed out", { command: commandPreview, timeoutMs });
       return err(
         createGitHubError(
           "command_failed",
@@ -123,11 +128,13 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
 
     // Handle success
     if (status === 0) {
+      logDataSync("debug", "Command succeeded", { command: commandPreview });
       return ok(stdout);
     }
 
     // Handle errors
     if (stderr.includes("not logged in") || stderr.includes("auth login")) {
+      logDataSync("error", "GitHub authentication required", { command: commandPreview });
       return err(
         createGitHubError(
           "not_authenticated",
@@ -138,6 +145,7 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
     }
 
     if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
+      logDataSync("error", "Repository not found", { command: commandPreview });
       return err(
         createGitHubError(
           "repo_not_found",
@@ -148,9 +156,11 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
     }
 
     if (stderr.includes("connect") || stderr.includes("network")) {
+      logDataSync("error", "Network error", { command: commandPreview });
       return err(createGitHubError("network_error", "Network error", stderr.trim()));
     }
 
+    logDataSync("error", `Command failed with exit code ${status}`, { command: commandPreview, exitCode: status });
     return err(
       createGitHubError(
         "command_failed",
@@ -163,6 +173,7 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
+      logDataSync("error", "GitHub CLI not installed");
       return err(
         createGitHubError(
           "gh_not_installed",
@@ -172,6 +183,7 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
       );
     }
 
+    logDataSync("error", "Failed to execute gh command", { error: errorMessage });
     return err(
       createGitHubError("command_failed", "Failed to execute gh command", errorMessage)
     );
