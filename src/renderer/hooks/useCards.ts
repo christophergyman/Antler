@@ -4,6 +4,12 @@ import type { ConfigError, GitHubError } from '@core/types/result';
 import { getCachedConfig } from '@services/config';
 import { fetchIssuesWithPRs } from '@services/github';
 import { syncCards } from '@services/cardSync';
+import type { DataSource } from './useDataSource';
+import { mockCards } from '../data/mockCards';
+
+interface UseCardsOptions {
+  dataSource: DataSource;
+}
 
 interface UseCardsReturn {
   cards: Card[];
@@ -23,7 +29,7 @@ function formatError(error: FetchError): string {
   return error.message;
 }
 
-export function useCards(): UseCardsReturn {
+export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
   const [cards, setCards] = useState<Card[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -41,6 +47,15 @@ export function useCards(): UseCardsReturn {
     }
     setError(null);
     setErrorCode(null);
+
+    // Return mock data immediately if mock mode
+    if (dataSource === 'mock') {
+      setCards(mockCards);
+      hasFetched.current = true;
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
 
     try {
       // Load config
@@ -69,12 +84,12 @@ export function useCards(): UseCardsReturn {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [cards]);
+  }, [cards, dataSource]);
 
   useEffect(() => {
     fetchCards();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dataSource]);
 
   return { cards, isLoading, isRefreshing, error, errorCode, refresh: fetchCards };
 }
