@@ -30,6 +30,12 @@ export function SortableCard({ card }: SortableCardProps) {
         description={card.github.body}
         labels={card.github.labels}
         hasError={card.hasError}
+        isDragging={isDragging}
+        worktreeOperation={card.worktreeOperation}
+        worktreeError={card.worktreeError}
+        worktreeCreated={card.worktreeCreated}
+        devcontainerRunning={card.devcontainerRunning}
+        devcontainerPort={card.devcontainerPort}
       />
     </div>
   );

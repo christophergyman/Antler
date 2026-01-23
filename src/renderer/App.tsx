@@ -8,6 +8,7 @@ import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
 import { getCachedConfig } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
+import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
 
 function ActionButton({
   onClick,
@@ -130,7 +131,18 @@ export default function App() {
   useEffect(() => {
     initLogger();
     logSystem('info', 'App started');
+
+    // Start Docker runtime in background (non-blocking)
+    ensureDockerRuntime();
+
+    const unsubscribe = onDockerRuntimeStatusChange((status) => {
+      if (status === 'ready') {
+        logSystem('info', 'Docker runtime became ready');
+      }
+    });
+
     return () => {
+      unsubscribe();
       shutdownLogger();
     };
   }, []);

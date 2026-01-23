@@ -38,6 +38,9 @@ Antler provides a visual workflow to track issues and PRs across multiple branch
 - [Rust](https://rustup.rs) - Required for Tauri backend compilation
 - Git
 - [GitHub CLI](https://cli.github.com) (`gh`) - For fetching issues and PRs
+- **Docker runtime** - Required for devcontainer work sessions:
+  - **macOS**: [Colima](https://github.com/abiosoft/colima) (`brew install colima`) - auto-started by Antler
+  - **Linux/Windows**: Docker Desktop or Docker daemon
 
 ## Installation
 
@@ -111,6 +114,7 @@ Antler uses Tauri's two-tier architecture with all business logic in TypeScript:
 │    Tauri JS Plugins                 │
 │    (@tauri-apps/plugin-shell)       │
 │    (@tauri-apps/plugin-fs)          │
+│    (@tauri-apps/plugin-os)          │
 └─────────────────────────────────────┘
                │
 ┌─────────────────────────────────────┐
@@ -129,9 +133,10 @@ src/
 │   ├── types/      # Card, GitHubInfo, CIStatus, Result types
 │   └── utils/      # Collection utilities, UID generation
 ├── services/       # Frontend services using Tauri plugins
-│   ├── github.ts   # GitHub CLI wrapper (@tauri-apps/plugin-shell)
-│   ├── config.ts   # Config loader (@tauri-apps/plugin-fs)
-│   └── cardSync.ts # Card sync logic
+│   ├── github.ts       # GitHub CLI wrapper (@tauri-apps/plugin-shell)
+│   ├── config.ts       # Config loader (@tauri-apps/plugin-fs)
+│   ├── cardSync.ts     # Card sync logic
+│   └── dockerRuntime.ts # Docker/Colima auto-start (@tauri-apps/plugin-os)
 └── renderer/       # React application
     ├── components/ # KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
     ├── hooks/      # useCards, useKanbanBoard, useDataSource

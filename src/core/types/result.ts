@@ -64,8 +64,116 @@ export function createGitHubError(
 }
 
 // ============================================================================
+// Worktree Errors
+// ============================================================================
+
+export type WorktreeErrorCode =
+  | "git_not_installed"
+  | "worktree_exists"
+  | "worktree_create_failed"
+  | "worktree_remove_failed"
+  | "branch_checked_out"
+  | "invalid_branch_name"
+  | "repo_not_found";
+
+export interface WorktreeError {
+  readonly code: WorktreeErrorCode;
+  readonly message: string;
+  readonly details?: string;
+}
+
+export function createWorktreeError(
+  code: WorktreeErrorCode,
+  message: string,
+  details?: string
+): WorktreeError {
+  return Object.freeze({ code, message, details });
+}
+
+// ============================================================================
+// Devcontainer Errors
+// ============================================================================
+
+export type DevcontainerErrorCode =
+  | "devcontainer_not_installed"
+  | "docker_not_running"
+  | "no_devcontainer_config"
+  | "devcontainer_start_failed"
+  | "devcontainer_stop_failed"
+  | "no_available_ports"
+  | "port_parse_failed";
+
+export interface DevcontainerError {
+  readonly code: DevcontainerErrorCode;
+  readonly message: string;
+  readonly details?: string;
+}
+
+export function createDevcontainerError(
+  code: DevcontainerErrorCode,
+  message: string,
+  details?: string
+): DevcontainerError {
+  return Object.freeze({ code, message, details });
+}
+
+// ============================================================================
+// Prerequisites Errors
+// ============================================================================
+
+export type PrerequisiteErrorCode =
+  | "git_not_installed"
+  | "devcontainer_not_installed"
+  | "docker_not_running"
+  | "docker_not_installed"
+  | "colima_not_installed"
+  | "colima_start_failed";
+
+export interface PrerequisiteError {
+  readonly code: PrerequisiteErrorCode;
+  readonly message: string;
+  readonly details?: string;
+}
+
+export function createPrerequisiteError(
+  code: PrerequisiteErrorCode,
+  message: string,
+  details?: string
+): PrerequisiteError {
+  return Object.freeze({ code, message, details });
+}
+
+// ============================================================================
+// Work Session Errors
+// ============================================================================
+
+export type WorkSessionErrorCode =
+  | "prerequisite_failed"
+  | "worktree_failed"
+  | "devcontainer_failed"
+  | "cancelled";
+
+export interface WorkSessionError {
+  readonly code: WorkSessionErrorCode;
+  readonly message: string;
+  readonly details?: string;
+}
+
+export function createWorkSessionError(
+  code: WorkSessionErrorCode,
+  message: string,
+  details?: string
+): WorkSessionError {
+  return Object.freeze({ code, message, details });
+}
+
+// ============================================================================
 // Type Aliases
 // ============================================================================
 
 export type ConfigResult<T> = Result<T, ConfigError>;
 export type GitHubResult<T> = Result<T, GitHubError>;
+export type WorktreeResult<T> = Result<T, WorktreeError>;
+export type DevcontainerResult<T> = Result<T, DevcontainerError>;
+export type PrerequisiteResult<T> = Result<T, PrerequisiteError>;
+export type WorkSessionResult<T> = Result<T, WorkSessionError>;

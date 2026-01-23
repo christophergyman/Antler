@@ -25,7 +25,14 @@ export type UserActionType =
   | "card_drag_start"
   | "card_drag_end"
   | "data_refresh"
-  | "data_source_toggle";
+  | "data_source_toggle"
+  | "worktree_start"
+  | "worktree_stop"
+  | "worktree_cancel"
+  | "work_session_start"
+  | "work_session_started"
+  | "work_session_stop"
+  | "work_session_stopped";
 
 // ============================================================================
 // Log Entry

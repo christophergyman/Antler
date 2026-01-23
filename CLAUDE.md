@@ -12,6 +12,9 @@ Antler is a Tauri v2 desktop application for managing parallel GitHub work sessi
 - **Rust** (stable) - Required for Tauri backend compilation
 - **Git** - Version control
 - **GitHub CLI** (`gh`) - Required for fetching issues and PRs
+- **Docker runtime** - Required for devcontainer work sessions:
+  - **macOS**: [Colima](https://github.com/abiosoft/colima) (`brew install colima`) - auto-started by Antler
+  - **Linux/Windows**: Docker Desktop or Docker daemon
 
 ## Commands
 
@@ -70,12 +73,13 @@ Key configuration files in `src-tauri/`:
 - **`capabilities/default.json`** - Permission definitions for plugins
 
 **Current permissions:**
-- `shell:allow-execute` - Execute shell commands (scoped to `gh` only)
+- `shell:allow-execute` - Execute shell commands (scoped to `gh`, `git`, `docker`, `colima`, `devcontainer`)
 - `fs:allow-read`, `fs:allow-exists` - Read files (for config loading)
 - `fs:allow-write`, `fs:allow-mkdir`, `fs:allow-remove` - Write files (for logging)
 - `path:default` - Access path utilities
+- `os:default` - Platform detection (for macOS-specific Colima handling)
 
-**Shell plugin scope:** Only the `gh` command is allowed. To add other commands, update `plugins.shell.scope` in `tauri.conf.json`.
+**Shell plugin scope:** Commands `gh`, `git`, `docker`, `colima`, `devcontainer` are allowed. To add other commands, update `shell:allow-execute` in `src-tauri/capabilities/default.json`.
 
 ## Architecture
 
@@ -85,7 +89,7 @@ Key configuration files in `src-tauri/`:
 
 ### Directory Structure
 - **src/core/** - Shared TypeScript (Card types, operations, utilities)
-- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts, logging.ts)
+- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts, logging.ts, dockerRuntime.ts)
 - **src/renderer/** - React components and hooks
   - `components/` - KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
   - `hooks/` - useCards, useKanbanBoard, useDataSource
@@ -219,6 +223,7 @@ error('Failure occurred');
 - **Cards are immutable**: Always use update functions, never mutate directly
 - **Factory functions**: Use `createCard()`, `createGitHubInfo()` for type-safe object creation
 - **Parallel operations**: Use `Promise.all`/`Promise.allSettled` for concurrent work
-- **Tauri plugins**: Services use `@tauri-apps/plugin-shell` and `@tauri-apps/plugin-fs` for native access
+- **Tauri plugins**: Services use `@tauri-apps/plugin-shell`, `@tauri-apps/plugin-fs`, and `@tauri-apps/plugin-os` for native access
+- **Auto-start Docker**: On macOS, Colima is auto-started at app boot if Docker isn't running
 - **Path aliases**: `@core/*` for core module, `@services/*` for services
 - **Drag-and-drop**: @dnd-kit with DndContext at board level, useDroppable for columns, useSortable for cards

@@ -8,6 +8,8 @@ import type { GitHubInfo } from "./github";
 
 export type CardStatus = "idle" | "in_progress" | "waiting" | "done";
 
+export type WorktreeOperation = "idle" | "creating" | "removing" | "error";
+
 export interface Card {
   readonly name: string;
   readonly sessionUid: string;
@@ -17,4 +19,11 @@ export interface Card {
   readonly github: GitHubInfo;
   readonly createdAt: string;
   readonly updatedAt: string;
+  // Worktree fields
+  readonly worktreePath: string | null;
+  readonly worktreeOperation: WorktreeOperation;
+  readonly worktreeError: string | null;
+  // Devcontainer fields
+  readonly devcontainerRunning: boolean;
+  readonly devcontainerPort: number | null;
 }
