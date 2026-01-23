@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { KanbanCard } from './components/KanbanCard';
+import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { mapCardStatusToStatusType } from './utils/statusMapping';
@@ -121,9 +122,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} />
-      {renderContent()}
-    </div>
+    <DotBackground>
+      <div className="min-h-screen flex flex-col">
+        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} />
+        {renderContent()}
+      </div>
+    </DotBackground>
   );
 }
