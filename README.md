@@ -1,6 +1,23 @@
 # Antler
 
-A modern Tauri v2 desktop application for managing parallel GitHub work sessions. Built with React, TypeScript, Tailwind CSS, and a minimal Rust backend.
+**A Kanban-style desktop app for managing parallel GitHub work sessions.**
+
+Antler provides a visual workflow to track issues and PRs across multiple branches. Drag cards between columns to update status, see CI results at a glance, and switch between live GitHub data and mock mode for development.
+
+![Kanban Board](./docs/assets/screenshot-kanban.png)
+
+## Features
+
+- **Kanban Board** - 4-column workflow: Idle, In Progress, Waiting, Done
+- **Drag-and-Drop** - Move cards between columns to change status instantly
+- **GitHub Integration** - Fetches issues and PRs via GitHub CLI with labels and CI status
+- **Mock Data Mode** - Toggle for development without API calls
+
+## Screenshots
+
+| Main View | Drag-and-Drop |
+|-----------|---------------|
+| ![Kanban](./docs/assets/screenshot-kanban.png) | ![Drag](./docs/assets/screenshot-drag.png) |
 
 ## Tech Stack
 
@@ -116,9 +133,10 @@ src/
 │   ├── config.ts   # Config loader (@tauri-apps/plugin-fs)
 │   └── cardSync.ts # Card sync logic
 └── renderer/       # React application
-    ├── components/ # UI components
-    ├── hooks/      # React hooks (useCards)
-    └── utils/      # Frontend utilities
+    ├── components/ # KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
+    ├── hooks/      # useCards, useKanbanBoard, useDataSource
+    ├── constants/  # Status colors and column configuration
+    └── data/       # Mock card data for development
 
 src-tauri/          # Minimal Rust backend
 ├── src/            # ~10 lines: plugin registration

@@ -86,6 +86,10 @@ Key configuration files in `src-tauri/`:
 - **src/core/** - Shared TypeScript (Card types, operations, utilities)
 - **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts)
 - **src/renderer/** - React components and hooks
+  - `components/` - KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
+  - `hooks/` - useCards, useKanbanBoard, useDataSource
+  - `constants/` - Status colors and column configuration
+  - `data/` - Mock card data for development
 - **src-tauri/** - Minimal Rust backend (plugin registration only)
 
 ### Card System
@@ -97,8 +101,39 @@ The core data structure is the `Card` - an immutable representation of a paralle
 
 All Card operations are **immutable** (return new objects via `Object.freeze`). Collection utilities are designed for **parallel-safe** processing.
 
+**Status values:** `idle`, `in_progress`, `waiting`, `done`
+
+Status changes auto-clear errors when moving cards out of the 'waiting' column.
+
 ### Build Output
 Vite compiles frontend to `dist/`. Tauri builds platform-specific binaries to `src-tauri/target/`.
+
+## UI Components
+
+### Kanban Board
+The main UI is a 4-column Kanban board with drag-and-drop:
+
+- `KanbanBoard.tsx` - DndContext wrapper, handles drag start/end events
+- `KanbanColumn.tsx` - Droppable column with color-coded header
+- `KanbanCard.tsx` - Card display with title, labels, error badge
+- `SortableCard.tsx` - Drag-and-drop wrapper using @dnd-kit/sortable
+
+**Libraries:** `@dnd-kit/core`, `@dnd-kit/sortable`
+
+**Column configuration:** Defined in `src/renderer/constants/status.ts`
+
+| Column | Color | Purpose |
+|--------|-------|---------|
+| Idle | Gray | Cards not currently being worked on |
+| In Progress | Blue | Active work items |
+| Waiting | Amber | Blocked or awaiting review |
+| Done | Green | Completed work |
+
+## React Hooks
+
+- **useCards** - Data fetching with loading/error state and refresh capability
+- **useKanbanBoard** - Drag-and-drop handling, updates card status on drop
+- **useDataSource** - Toggle between mock data and live GitHub data
 
 ## Error Handling
 
@@ -123,3 +158,4 @@ type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 - **Parallel operations**: Use `Promise.all`/`Promise.allSettled` for concurrent work
 - **Tauri plugins**: Services use `@tauri-apps/plugin-shell` and `@tauri-apps/plugin-fs` for native access
 - **Path aliases**: `@core/*` for core module, `@services/*` for services
+- **Drag-and-drop**: @dnd-kit with DndContext at board level, useDroppable for columns, useSortable for cards

@@ -1,0 +1,8 @@
+# Screenshot Placeholders
+
+Add the following screenshots to this directory:
+
+- `screenshot-kanban.png` - Main Kanban board view (1280x800 recommended)
+- `screenshot-drag.png` - Drag-and-drop action (optional, can be a GIF)
+
+These images are referenced in README.md.
