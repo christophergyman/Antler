@@ -1,10 +1,12 @@
-import { type ReactNode, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
+import { getCachedConfig } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 
 function ActionButton({
@@ -61,24 +63,31 @@ function Header({
   isMock,
   setDataSource,
   onRefresh,
+  repository,
   isRefreshing
 }: {
   isMock: boolean;
   setDataSource: (source: "mock" | "github") => void;
   onRefresh: () => void;
+  repository: string | null;
   isRefreshing: boolean;
 }) {
   return (
     <div className="px-6 pt-6 pb-2 shrink-0">
       {/* Match board width: 4 columns × 18rem + 3 gaps × 1rem = 75rem, but allow shrinking */}
       <div className="flex items-center justify-between w-full max-w-[calc(4*18rem+3*1rem)]">
-        <Toggle
-          pressed={isMock}
-          onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
-          className={isMock ? "text-amber-600" : "text-green-600"}
-        >
-          {isMock ? "Mock Data" : "GitHub"}
-        </Toggle>
+        <div className="flex items-center gap-4">
+          <Toggle
+            pressed={isMock}
+            onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
+            className={isMock ? "text-amber-600" : "text-green-600"}
+          >
+            {isMock ? "Mock Data" : "GitHub"}
+          </Toggle>
+          {repository && (
+            <span className="text-gray-500 text-sm">{repository}</span>
+          )}
+        </div>
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
@@ -104,6 +113,19 @@ export default function App() {
   const { dataSource, setDataSource, isMock } = useDataSource();
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
+  const [repository, setRepository] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isMock) {
+      getCachedConfig().then(result => {
+        if (result.ok) {
+          setRepository(result.value.github.repository);
+        }
+      });
+    } else {
+      setRepository(null);
+    }
+  }, [isMock]);
 
   useEffect(() => {
     initLogger();
@@ -151,7 +173,7 @@ export default function App() {
   return (
     <DotBackground>
       <div className="h-screen flex flex-col overflow-hidden">
-        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} isRefreshing={isRefreshing} />
+        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} isRefreshing={isRefreshing} />
         {renderContent()}
       </div>
     </DotBackground>
