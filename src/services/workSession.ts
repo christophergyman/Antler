@@ -19,7 +19,7 @@ import {
   stopDevcontainer,
   hasDevcontainerConfig,
 } from "./devcontainer";
-import { logSystem, logUserAction } from "./logging";
+import { logWorktree, logDevcontainer, logPrerequisites, logUserAction } from "./logging";
 
 // ============================================================================
 // Types
@@ -78,11 +78,16 @@ export async function startWorkSession(
   }
 
   // Step 1: Check prerequisites
-  logSystem("debug", "Checking prerequisites");
+  logPrerequisites("debug", "Checking prerequisites for work session");
   const prereqResult = await checkPrerequisites();
 
   if (!prereqResult.ok) {
-    logSystem("error", "Prerequisites check failed", { error: prereqResult.error });
+    logPrerequisites("error", "Prerequisites check failed", {
+      code: prereqResult.error.code,
+      message: prereqResult.error.message,
+      details: prereqResult.error.details,
+      cardId: card.sessionUid,
+    });
     return err(
       createWorkSessionError(
         "prerequisite_failed",
@@ -129,11 +134,17 @@ export async function startWorkSession(
   }
 
   // Step 4: Create worktree
-  logSystem("debug", "Creating worktree", { branchName });
+  logWorktree("info", "Creating worktree", { branchName, cardId: card.sessionUid });
   const worktreeResult = await createWorktree(repoRoot, branchName, signal);
 
   if (!worktreeResult.ok) {
-    logSystem("error", "Worktree creation failed", { error: worktreeResult.error });
+    logWorktree("error", "Worktree creation failed", {
+      code: worktreeResult.error.code,
+      message: worktreeResult.error.message,
+      details: worktreeResult.error.details,
+      branchName,
+      cardId: card.sessionUid,
+    });
     return err(
       createWorkSessionError(
         "worktree_failed",
@@ -147,18 +158,23 @@ export async function startWorkSession(
 
   // Check for cancellation - cleanup worktree if cancelled
   if (signal?.aborted) {
-    logSystem("info", "Cleaning up worktree after cancellation");
+    logWorktree("info", "Cleaning up worktree after cancellation", { branchName, cardId: card.sessionUid });
     await removeWorktree(repoRoot, branchName);
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
   // Step 5: Find available port
-  logSystem("debug", "Finding available port");
+  logDevcontainer("debug", "Finding available port for devcontainer");
   const portResult = await findAvailablePort();
 
   if (!portResult.ok) {
     // Rollback: remove worktree
-    logSystem("info", "Rolling back worktree due to port allocation failure");
+    logDevcontainer("error", "Port allocation failed, rolling back worktree", {
+      code: portResult.error.code,
+      message: portResult.error.message,
+      branchName,
+      cardId: card.sessionUid,
+    });
     await removeWorktree(repoRoot, branchName);
 
     return err(
@@ -174,18 +190,25 @@ export async function startWorkSession(
 
   // Check for cancellation - cleanup worktree if cancelled
   if (signal?.aborted) {
-    logSystem("info", "Cleaning up worktree after cancellation");
+    logWorktree("info", "Cleaning up worktree after port allocation cancellation", { branchName, cardId: card.sessionUid });
     await removeWorktree(repoRoot, branchName);
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
   // Step 6: Start devcontainer
-  logSystem("debug", "Starting devcontainer", { worktreePath, port });
+  logDevcontainer("info", "Starting devcontainer", { worktreePath, port, cardId: card.sessionUid });
   const devcontainerResult = await startDevcontainer(worktreePath, port, signal);
 
   if (!devcontainerResult.ok) {
     // Rollback: remove worktree
-    logSystem("info", "Rolling back worktree due to devcontainer failure");
+    logDevcontainer("error", "Devcontainer start failed, rolling back worktree", {
+      code: devcontainerResult.error.code,
+      message: devcontainerResult.error.message,
+      details: devcontainerResult.error.details,
+      worktreePath,
+      port,
+      cardId: card.sessionUid,
+    });
     await removeWorktree(repoRoot, branchName);
 
     return err(
@@ -236,22 +259,31 @@ export async function stopWorkSession(
   const worktreePath = card.worktreePath ?? getWorktreePath(repoRoot, branchName);
 
   // Step 1: Stop devcontainer
-  logSystem("debug", "Stopping devcontainer", { worktreePath });
+  logDevcontainer("info", "Stopping devcontainer", { worktreePath, cardId: card.sessionUid });
   const stopResult = await stopDevcontainer(worktreePath);
 
   if (!stopResult.ok) {
-    logSystem("warn", "Failed to stop devcontainer, continuing with cleanup", {
-      error: stopResult.error,
+    logDevcontainer("warn", "Failed to stop devcontainer, continuing with cleanup", {
+      code: stopResult.error.code,
+      message: stopResult.error.message,
+      worktreePath,
+      cardId: card.sessionUid,
     });
     // Continue with worktree removal even if devcontainer stop fails
   }
 
   // Step 2: Remove worktree
-  logSystem("debug", "Removing worktree", { branchName });
+  logWorktree("info", "Removing worktree", { branchName, cardId: card.sessionUid });
   const removeResult = await removeWorktree(repoRoot, branchName);
 
   if (!removeResult.ok) {
-    logSystem("error", "Failed to remove worktree", { error: removeResult.error });
+    logWorktree("error", "Failed to remove worktree", {
+      code: removeResult.error.code,
+      message: removeResult.error.message,
+      details: removeResult.error.details,
+      branchName,
+      cardId: card.sessionUid,
+    });
     return err(
       createWorkSessionError(
         "worktree_failed",

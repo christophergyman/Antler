@@ -7,7 +7,7 @@ import { Command } from "@tauri-apps/plugin-shell";
 import type { PrerequisiteResult } from "@core/types/result";
 import { ok, err, createPrerequisiteError } from "@core/types/result";
 import { checkDevcontainerCli, checkDockerRunning } from "./devcontainer";
-import { logSystem } from "./logging";
+import { logPrerequisites } from "./logging";
 
 // ============================================================================
 // Individual Checks
@@ -17,14 +17,14 @@ import { logSystem } from "./logging";
  * Check if git is installed
  */
 async function checkGit(): Promise<PrerequisiteResult<void>> {
-  logSystem("debug", "Checking git installation");
+  logPrerequisites("debug", "Checking git installation");
 
   try {
     const command = Command.create("run-git", ["--version"]);
     const output = await command.execute();
 
     if (output.code === 0) {
-      logSystem("debug", "Git found", { version: output.stdout.trim() });
+      logPrerequisites("debug", "Git found", { version: output.stdout.trim() });
       return ok(undefined);
     }
 
@@ -73,7 +73,7 @@ export interface PrerequisiteStatus {
  * Returns detailed error if any prerequisite is missing
  */
 export async function checkPrerequisites(): Promise<PrerequisiteResult<PrerequisiteStatus>> {
-  logSystem("info", "Checking prerequisites");
+  logPrerequisites("info", "Checking prerequisites");
 
   // Check all in parallel
   const [gitResult, devcontainerResult, dockerResult] = await Promise.all([
@@ -90,7 +90,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult<Prerequis
 
   // Return first error encountered (in order of importance)
   if (!gitResult.ok) {
-    logSystem("error", "Git not installed");
+    logPrerequisites("error", "Git not installed");
     return err(
       createPrerequisiteError(
         "git_not_installed",
@@ -101,7 +101,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult<Prerequis
   }
 
   if (!devcontainerResult.ok) {
-    logSystem("error", "Devcontainer CLI not installed");
+    logPrerequisites("error", "Devcontainer CLI not installed");
     return err(
       createPrerequisiteError(
         "devcontainer_not_installed",
@@ -112,7 +112,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult<Prerequis
   }
 
   if (!dockerResult.ok) {
-    logSystem("error", "Docker not running");
+    logPrerequisites("error", "Docker not running");
 
     // Distinguish between not installed and not running
     if (dockerResult.error.message.includes("not installed")) {
@@ -134,7 +134,7 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult<Prerequis
     );
   }
 
-  logSystem("info", "All prerequisites satisfied", { ...status });
+  logPrerequisites("info", "All prerequisites satisfied", { ...status });
   return ok(status);
 }
 

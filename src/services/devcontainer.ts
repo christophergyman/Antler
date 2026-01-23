@@ -7,7 +7,7 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { exists } from "@tauri-apps/plugin-fs";
 import type { DevcontainerResult } from "@core/types/result";
 import { ok, err, createDevcontainerError } from "@core/types/result";
-import { logDataSync } from "./logging";
+import { logDevcontainer } from "./logging";
 
 // ============================================================================
 // Constants
@@ -33,14 +33,14 @@ const DEVCONTAINER_CONFIG_PATH = ".devcontainer/devcontainer.json";
  * Check if devcontainer CLI is installed
  */
 export async function checkDevcontainerCli(): Promise<DevcontainerResult<void>> {
-  logDataSync("debug", "Checking devcontainer CLI installation");
+  logDevcontainer("debug", "Checking devcontainer CLI installation");
 
   try {
     const command = Command.create("run-devcontainer", ["--version"]);
     const output = await command.execute();
 
     if (output.code === 0) {
-      logDataSync("debug", "Devcontainer CLI found", { version: output.stdout.trim() });
+      logDevcontainer("debug", "Devcontainer CLI found", { version: output.stdout.trim() });
       return ok(undefined);
     }
 
@@ -78,14 +78,14 @@ export async function checkDevcontainerCli(): Promise<DevcontainerResult<void>> 
  * Check if Docker daemon is running
  */
 export async function checkDockerRunning(): Promise<DevcontainerResult<void>> {
-  logDataSync("debug", "Checking Docker daemon");
+  logDevcontainer("debug", "Checking Docker daemon");
 
   try {
     const command = Command.create("run-docker", ["info"]);
     const output = await command.execute();
 
     if (output.code === 0) {
-      logDataSync("debug", "Docker daemon is running");
+      logDevcontainer("debug", "Docker daemon is running");
       return ok(undefined);
     }
 
@@ -153,14 +153,14 @@ export async function hasDevcontainerConfig(workspacePath: string): Promise<bool
  * Get list of ports currently in use by Docker containers
  */
 export async function getUsedPorts(): Promise<DevcontainerResult<Set<number>>> {
-  logDataSync("debug", "Getting used Docker ports");
+  logDevcontainer("debug", "Getting used Docker ports");
 
   try {
     const command = Command.create("run-docker", ["ps", "--format", "{{.Ports}}"]);
     const output = await command.execute();
 
     if (output.code !== 0) {
-      logDataSync("warn", "Failed to get Docker ports", { stderr: output.stderr });
+      logDevcontainer("warn", "Failed to get Docker ports", { stderr: output.stderr });
       // Return empty set on failure - we'll try to use ports anyway
       return ok(new Set<number>());
     }
@@ -182,11 +182,11 @@ export async function getUsedPorts(): Promise<DevcontainerResult<Set<number>>> {
       }
     }
 
-    logDataSync("debug", "Found used ports", { count: usedPorts.size, ports: Array.from(usedPorts) });
+    logDevcontainer("debug", "Found used ports", { count: usedPorts.size, ports: Array.from(usedPorts) });
     return ok(usedPorts);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logDataSync("warn", "Failed to get used ports", { error: message });
+    logDevcontainer("warn", "Failed to get used ports", { error: message });
     // Return empty set on error - we'll try to use ports anyway
     return ok(new Set<number>());
   }
@@ -206,7 +206,7 @@ export async function findAvailablePort(): Promise<DevcontainerResult<number>> {
 
   for (let port = BASE_PORT; port <= MAX_PORT; port++) {
     if (!usedPorts.has(port)) {
-      logDataSync("debug", "Found available port", { port });
+      logDevcontainer("debug", "Found available port", { port });
       return ok(port);
     }
   }
@@ -237,7 +237,7 @@ export async function startDevcontainer(
   port: number,
   signal?: AbortSignal
 ): Promise<DevcontainerResult<DevcontainerInfo>> {
-  logDataSync("info", "Starting devcontainer", { workspacePath, port });
+  logDevcontainer("info", "Starting devcontainer", { workspacePath, port });
 
   // Check for cancellation
   if (signal?.aborted) {
@@ -286,7 +286,7 @@ export async function startDevcontainer(
 
     // Handle abort signal
     const abortHandler = () => {
-      logDataSync("info", "Aborting devcontainer start");
+      logDevcontainer("info", "Aborting devcontainer start");
       child?.kill();
     };
     signal?.addEventListener("abort", abortHandler);
@@ -315,7 +315,7 @@ export async function startDevcontainer(
     }
 
     if (status !== 0) {
-      logDataSync("error", "Devcontainer start failed", { exitCode: status, stderr });
+      logDevcontainer("error", "Devcontainer start failed", { exitCode: status, stderr });
       return err(
         createDevcontainerError(
           "devcontainer_start_failed",
@@ -338,11 +338,11 @@ export async function startDevcontainer(
       // Ignore parsing errors
     }
 
-    logDataSync("info", "Devcontainer started successfully", { containerId, port });
+    logDevcontainer("info", "Devcontainer started successfully", { containerId, port });
     return ok({ containerId, port });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logDataSync("error", "Failed to start devcontainer", { error: message });
+    logDevcontainer("error", "Failed to start devcontainer", { error: message });
     return err(
       createDevcontainerError(
         "devcontainer_start_failed",
@@ -360,7 +360,7 @@ export async function startDevcontainer(
 export async function stopDevcontainer(
   workspacePath: string
 ): Promise<DevcontainerResult<void>> {
-  logDataSync("info", "Stopping devcontainer", { workspacePath });
+  logDevcontainer("info", "Stopping devcontainer", { workspacePath });
 
   try {
     // List containers with the workspace label
@@ -375,23 +375,23 @@ export async function stopDevcontainer(
 
     if (listOutput.code !== 0 || !listOutput.stdout.trim()) {
       // No containers found - that's okay
-      logDataSync("debug", "No devcontainer found to stop", { workspacePath });
+      logDevcontainer("debug", "No devcontainer found to stop", { workspacePath });
       return ok(undefined);
     }
 
     const containerIds = listOutput.stdout.trim().split("\n").filter(Boolean);
 
     for (const containerId of containerIds) {
-      logDataSync("debug", "Stopping container", { containerId });
+      logDevcontainer("debug", "Stopping container", { containerId });
       const stopCommand = Command.create("run-docker", ["stop", containerId]);
       await stopCommand.execute();
     }
 
-    logDataSync("info", "Devcontainer stopped successfully", { workspacePath });
+    logDevcontainer("info", "Devcontainer stopped successfully", { workspacePath });
     return ok(undefined);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logDataSync("error", "Failed to stop devcontainer", { error: message });
+    logDevcontainer("error", "Failed to stop devcontainer", { error: message });
     return err(
       createDevcontainerError(
         "devcontainer_stop_failed",

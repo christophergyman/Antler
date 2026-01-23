@@ -175,11 +175,18 @@ The app uses a three-layer logging system: console output (development), DevTool
 | `data_sync` | GitHub API calls, data fetching |
 | `user_action` | User interactions (card moves, toggles, refreshes) |
 | `performance` | Timing metrics |
+| `worktree` | Git worktree operations (create, remove, list) |
+| `devcontainer` | Devcontainer lifecycle (start, stop, port allocation) |
+| `docker` | Docker runtime detection and Colima management |
+| `prerequisites` | Tool installation checks (git, docker, devcontainer CLI) |
 
 ### Usage
 
 ```typescript
-import { logSystem, logConfig, logDataSync, logUserAction, logPerformance } from '@services/logging';
+import {
+  logSystem, logConfig, logDataSync, logUserAction, logPerformance,
+  logWorktree, logDevcontainer, logDocker, logPrerequisites
+} from '@services/logging';
 
 // Category-specific logging
 logSystem('info', 'App started');
@@ -187,6 +194,12 @@ logConfig('error', 'Config validation failed', { code: 'config_invalid' });
 logDataSync('debug', 'Fetching issues', { repo: 'owner/repo' });
 logUserAction('card_status_change', 'Card moved', { cardId, from, to });
 logPerformance('Data fetch completed', 1234);
+
+// Work session logging
+logWorktree('info', 'Creating worktree', { branchName, cardId });
+logDevcontainer('error', 'Devcontainer start failed', { code, message, port });
+logDocker('info', 'Docker runtime ready');
+logPrerequisites('error', 'Git not installed');
 
 // Convenience functions
 logCardStatusChange(cardId, 'idle', 'in_progress');

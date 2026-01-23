@@ -6,7 +6,7 @@
 import { Command } from "@tauri-apps/plugin-shell";
 import type { WorktreeResult } from "@core/types/result";
 import { ok, err, createWorktreeError } from "@core/types/result";
-import { logDataSync } from "./logging";
+import { logWorktree } from "./logging";
 
 // ============================================================================
 // Constants
@@ -53,7 +53,7 @@ async function execGit(
   timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<WorktreeResult<string>> {
   const commandPreview = `git ${args.slice(0, 4).join(" ")}${args.length > 4 ? "..." : ""}`;
-  logDataSync("debug", `Executing: ${commandPreview}`);
+  logWorktree("debug", `Executing: ${commandPreview}`);
 
   try {
     const command = Command.create("run-git", args);
@@ -86,7 +86,7 @@ async function execGit(
     clearTimeout(timeoutId);
 
     if (timedOut) {
-      logDataSync("error", "Git command timed out", { command: commandPreview, timeoutMs });
+      logWorktree("error", "Git command timed out", { command: commandPreview, timeoutMs });
       return err(
         createWorktreeError(
           "worktree_create_failed",
@@ -97,13 +97,13 @@ async function execGit(
     }
 
     if (status === 0) {
-      logDataSync("debug", "Git command succeeded", { command: commandPreview });
+      logWorktree("debug", "Git command succeeded", { command: commandPreview });
       return ok(stdout);
     }
 
     // Handle specific errors
     if (stderr.includes("already checked out") || stderr.includes("is already used")) {
-      logDataSync("error", "Branch already checked out", { command: commandPreview });
+      logWorktree("error", "Branch already checked out", { command: commandPreview });
       return err(
         createWorktreeError(
           "branch_checked_out",
@@ -114,7 +114,7 @@ async function execGit(
     }
 
     if (stderr.includes("already exists")) {
-      logDataSync("error", "Worktree already exists", { command: commandPreview });
+      logWorktree("error", "Worktree already exists", { command: commandPreview });
       return err(
         createWorktreeError(
           "worktree_exists",
@@ -124,7 +124,7 @@ async function execGit(
       );
     }
 
-    logDataSync("error", `Git command failed with exit code ${status}`, {
+    logWorktree("error", `Git command failed with exit code ${status}`, {
       command: commandPreview,
       exitCode: status,
       stderr: stderr.trim()
@@ -140,7 +140,7 @@ async function execGit(
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
-      logDataSync("error", "Git not installed");
+      logWorktree("error", "Git not installed");
       return err(
         createWorktreeError(
           "git_not_installed",
@@ -150,7 +150,7 @@ async function execGit(
       );
     }
 
-    logDataSync("error", "Failed to execute git command", { error: errorMessage });
+    logWorktree("error", "Failed to execute git command", { error: errorMessage });
     return err(
       createWorktreeError("worktree_create_failed", "Failed to execute git command", errorMessage)
     );
@@ -197,7 +197,7 @@ export async function createWorktree(
 ): Promise<WorktreeResult<WorktreeInfo>> {
   const worktreePath = getWorktreePath(repoRoot, branchName);
 
-  logDataSync("info", "Creating worktree", { branchName, path: worktreePath });
+  logWorktree("info", "Creating worktree", { branchName, path: worktreePath });
 
   // Check for cancellation
   if (signal?.aborted) {
@@ -212,11 +212,11 @@ export async function createWorktree(
 
   if (exists || remoteExists) {
     // Use existing branch
-    logDataSync("debug", "Using existing branch", { branchName, local: exists, remote: remoteExists });
+    logWorktree("debug", "Using existing branch", { branchName, local: exists, remote: remoteExists });
     result = await execGit(["worktree", "add", worktreePath, branchName]);
   } else {
     // Create new branch from current HEAD
-    logDataSync("debug", "Creating new branch", { branchName });
+    logWorktree("debug", "Creating new branch", { branchName });
     result = await execGit(["worktree", "add", "-b", branchName, worktreePath]);
   }
 
@@ -224,7 +224,7 @@ export async function createWorktree(
     return result;
   }
 
-  logDataSync("info", "Worktree created successfully", { branchName, path: worktreePath });
+  logWorktree("info", "Worktree created successfully", { branchName, path: worktreePath });
   return ok({ path: worktreePath, branchName });
 }
 
@@ -237,13 +237,13 @@ export async function removeWorktree(
 ): Promise<WorktreeResult<void>> {
   const worktreePath = getWorktreePath(repoRoot, branchName);
 
-  logDataSync("info", "Removing worktree", { branchName, path: worktreePath });
+  logWorktree("info", "Removing worktree", { branchName, path: worktreePath });
 
   // First try to remove the worktree
   const removeResult = await execGit(["worktree", "remove", worktreePath, "--force"]);
 
   if (!removeResult.ok) {
-    logDataSync("error", "Failed to remove worktree", { branchName, error: removeResult.error.message });
+    logWorktree("error", "Failed to remove worktree", { branchName, error: removeResult.error.message });
     return err(
       createWorktreeError(
         "worktree_remove_failed",
@@ -256,7 +256,7 @@ export async function removeWorktree(
   // Prune to clean up any stale references
   await execGit(["worktree", "prune"]);
 
-  logDataSync("info", "Worktree removed successfully", { branchName });
+  logWorktree("info", "Worktree removed successfully", { branchName });
   return ok(undefined);
 }
 

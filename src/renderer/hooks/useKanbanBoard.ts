@@ -9,7 +9,7 @@ import {
   completeWorktreeRemoval,
   setWorktreeErrorState,
 } from '@core/card';
-import { logCardStatusChange, logUserAction } from '@services/logging';
+import { logCardStatusChange, logUserAction, logWorktree, logConfig } from '@services/logging';
 import { getCurrentRepoRoot } from '@services/config';
 import { startWorkSession, stopWorkSession } from '@services/workSession';
 
@@ -58,6 +58,12 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
         // Get repo root
         const repoRootResult = await getCurrentRepoRoot();
         if (!repoRootResult.ok) {
+          logConfig('error', 'Failed to get repo root for work session', {
+            code: repoRootResult.error.code,
+            message: repoRootResult.error.message,
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           updateCard(card.sessionUid, (c) =>
             setWorktreeErrorState(setStatus(c, 'idle'), repoRootResult.error.message)
           );
@@ -71,16 +77,33 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
 
         // Check if operation was cancelled
         if (abortController.signal.aborted) {
+          logUserAction('worktree_cancel', 'Work session start aborted', {
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           return;
         }
 
         if (result.ok) {
           // Success - update card with worktree info
+          logWorktree('info', 'Work session started successfully', {
+            cardId: card.sessionUid,
+            cardName: card.name,
+            worktreePath: result.value.worktreePath,
+            port: result.value.port,
+          });
           updateCard(card.sessionUid, (c) =>
             completeWorktreeCreation(c, result.value.worktreePath, result.value.port)
           );
         } else {
           // Failure - set error and revert to idle
+          logWorktree('error', 'Work session start failed', {
+            code: result.error.code,
+            message: result.error.message,
+            details: result.error.details,
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           updateCard(card.sessionUid, (c) =>
             setWorktreeErrorState(setStatus(c, 'idle'), result.error.message)
           );
@@ -88,7 +111,14 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       } catch (error) {
         // Unexpected error
         const message = error instanceof Error ? error.message : 'Unknown error';
+        const stack = error instanceof Error ? error.stack : undefined;
         if (!abortController.signal.aborted) {
+          logWorktree('error', 'Unexpected error during work session start', {
+            message,
+            stack,
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           updateCard(card.sessionUid, (c) =>
             setWorktreeErrorState(setStatus(c, 'idle'), message)
           );
@@ -135,6 +165,12 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
         // Get repo root
         const repoRootResult = await getCurrentRepoRoot();
         if (!repoRootResult.ok) {
+          logConfig('error', 'Failed to get repo root for stopping work session', {
+            code: repoRootResult.error.code,
+            message: repoRootResult.error.message,
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           updateCard(card.sessionUid, (c) =>
             setWorktreeErrorState(c, repoRootResult.error.message)
           );
@@ -148,14 +184,33 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
 
         if (result.ok) {
           // Success - clear worktree info
+          logWorktree('info', 'Work session stopped successfully', {
+            cardId: card.sessionUid,
+            cardName: card.name,
+          });
           updateCard(card.sessionUid, (c) => completeWorktreeRemoval(c));
         } else {
           // Failure - set error
+          logWorktree('error', 'Work session stop failed', {
+            code: result.error.code,
+            message: result.error.message,
+            details: result.error.details,
+            cardId: card.sessionUid,
+            cardName: card.name,
+            worktreePath: card.worktreePath,
+          });
           updateCard(card.sessionUid, (c) => setWorktreeErrorState(c, result.error.message));
         }
       } catch (error) {
         // Unexpected error
         const message = error instanceof Error ? error.message : 'Unknown error';
+        const stack = error instanceof Error ? error.stack : undefined;
+        logWorktree('error', 'Unexpected error during work session stop', {
+          message,
+          stack,
+          cardId: card.sessionUid,
+          cardName: card.name,
+        });
         updateCard(card.sessionUid, (c) => setWorktreeErrorState(c, message));
       }
     },

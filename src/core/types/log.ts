@@ -14,7 +14,11 @@ export type LogCategory =
   | "data_sync"
   | "config"
   | "system"
-  | "performance";
+  | "performance"
+  | "worktree"
+  | "devcontainer"
+  | "docker"
+  | "prerequisites";
 
 // ============================================================================
 // User Action Types

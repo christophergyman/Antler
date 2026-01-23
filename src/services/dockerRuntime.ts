@@ -5,7 +5,7 @@
 
 import { platform } from "@tauri-apps/plugin-os";
 import { Command } from "@tauri-apps/plugin-shell";
-import { logSystem } from "./logging";
+import { logDocker } from "./logging";
 
 // ============================================================================
 // Types
@@ -85,7 +85,7 @@ export async function ensureDockerRuntime(): Promise<void> {
 
   // Check if Docker is already running
   if (await isDockerRunning()) {
-    logSystem("info", "Docker runtime ready");
+    logDocker("info", "Docker runtime ready");
     setStatus("ready");
     return;
   }
@@ -94,34 +94,34 @@ export async function ensureDockerRuntime(): Promise<void> {
   const currentPlatform = await platform();
   if (currentPlatform === "macos") {
     if (!(await isColimaInstalled())) {
-      logSystem("warn", "Colima not installed - Docker not available");
+      logDocker("warn", "Colima not installed - Docker not available");
       setStatus("failed");
       return;
     }
 
     setStatus("starting");
-    logSystem("info", "Starting Colima in background");
+    logDocker("info", "Starting Colima in background");
 
     try {
       const command = Command.create("run-colima", ["start"]);
       const output = await command.execute();
 
       if (output.code === 0) {
-        logSystem("info", "Colima started successfully");
+        logDocker("info", "Colima started successfully");
         setStatus("ready");
       } else {
-        logSystem("error", "Colima failed to start", { stderr: output.stderr });
+        logDocker("error", "Colima failed to start", { stderr: output.stderr });
         setStatus("failed");
       }
     } catch (error) {
-      logSystem("error", "Colima start threw exception", {
+      logDocker("error", "Colima start threw exception", {
         error: String(error),
       });
       setStatus("failed");
     }
   } else {
     // Non-macOS: Docker not running, can't auto-start
-    logSystem("warn", "Docker not running on non-macOS platform");
+    logDocker("warn", "Docker not running on non-macOS platform");
     setStatus("failed");
   }
 }
