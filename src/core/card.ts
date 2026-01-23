@@ -19,7 +19,7 @@ import type { Card, CardStatus } from "./types/card";
 // Validation
 // ============================================================================
 
-const VALID_STATUSES: readonly CardStatus[] = ["idle", "active", "paused", "completed", "error"];
+const VALID_STATUSES: readonly CardStatus[] = ["idle", "in_progress", "waiting", "done"];
 
 function validateCardObject(obj: unknown): asserts obj is Record<string, unknown> {
   if (!obj || typeof obj !== "object") {
@@ -44,6 +44,10 @@ function validateCardObject(obj: unknown): asserts obj is Record<string, unknown
     throw new Error("Invalid card: worktreeCreated must be a boolean");
   }
 
+  if (typeof o.hasError !== "boolean") {
+    throw new Error("Invalid card: hasError must be a boolean");
+  }
+
   if (!o.github || typeof o.github !== "object") {
     throw new Error("Invalid card: github must be an object");
   }
@@ -65,6 +69,7 @@ export interface CreateCardOptions {
   name?: string;
   status?: CardStatus;
   worktreeCreated?: boolean;
+  hasError?: boolean;
   github?: Partial<GitHubInfo>;
 }
 
@@ -76,6 +81,7 @@ export function createCard(options: CreateCardOptions = {}): Card {
     sessionUid: uid,
     status: options.status ?? "idle",
     worktreeCreated: options.worktreeCreated ?? false,
+    hasError: options.hasError ?? false,
     github: createGitHubInfo(options.github),
     createdAt: now,
     updatedAt: now,
@@ -93,7 +99,7 @@ function touchUpdatedAt(card: Card): Card {
   });
 }
 
-export function updateCard<K extends keyof Pick<Card, "status" | "worktreeCreated">>(
+export function updateCard<K extends keyof Pick<Card, "status" | "worktreeCreated" | "hasError">>(
   card: Card,
   key: K,
   value: Card[K]
@@ -121,20 +127,28 @@ export function setStatus(card: Card, status: CardStatus): Card {
   return updateCard(card, "status", status);
 }
 
-export function activate(card: Card): Card {
-  return setStatus(card, "active");
+export function setInProgress(card: Card): Card {
+  return setStatus(card, "in_progress");
 }
 
-export function pause(card: Card): Card {
-  return setStatus(card, "paused");
+export function setWaiting(card: Card): Card {
+  return setStatus(card, "waiting");
 }
 
-export function complete(card: Card): Card {
-  return setStatus(card, "completed");
+export function setDone(card: Card): Card {
+  return setStatus(card, "done");
 }
 
-export function setError(card: Card): Card {
-  return setStatus(card, "error");
+// ============================================================================
+// Error Helpers
+// ============================================================================
+
+export function markError(card: Card): Card {
+  return updateCard(card, "hasError", true);
+}
+
+export function clearError(card: Card): Card {
+  return updateCard(card, "hasError", false);
 }
 
 // ============================================================================
@@ -157,24 +171,24 @@ export function markWorktreeRemoved(card: Card): Card {
 // Predicates
 // ============================================================================
 
-export function isActive(card: Card): boolean {
-  return card.status === "active";
+export function isInProgress(card: Card): boolean {
+  return card.status === "in_progress";
 }
 
 export function isIdle(card: Card): boolean {
   return card.status === "idle";
 }
 
-export function isPaused(card: Card): boolean {
-  return card.status === "paused";
+export function isWaiting(card: Card): boolean {
+  return card.status === "waiting";
 }
 
-export function isCompleted(card: Card): boolean {
-  return card.status === "completed";
+export function isDone(card: Card): boolean {
+  return card.status === "done";
 }
 
 export function hasError(card: Card): boolean {
-  return card.status === "error";
+  return card.hasError;
 }
 
 export function hasWorktree(card: Card): boolean {
@@ -206,6 +220,7 @@ export function fromJSON(json: string): Card {
     sessionUid: parsed.sessionUid as string,
     status: parsed.status as CardStatus,
     worktreeCreated: parsed.worktreeCreated as boolean,
+    hasError: parsed.hasError as boolean,
     github: createGitHubInfo(parsed.github as Partial<GitHubInfo>),
     createdAt: parsed.createdAt as string,
     updatedAt: parsed.updatedAt as string,
@@ -231,6 +246,7 @@ export function fromJSONArray(json: string): Card[] {
         sessionUid: item.sessionUid as string,
         status: item.status as CardStatus,
         worktreeCreated: item.worktreeCreated as boolean,
+        hasError: item.hasError as boolean,
         github: createGitHubInfo(item.github as Partial<GitHubInfo>),
         createdAt: item.createdAt as string,
         updatedAt: item.updatedAt as string,

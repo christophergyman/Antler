@@ -6,13 +6,14 @@
 
 import type { GitHubInfo } from "./github";
 
-export type CardStatus = "idle" | "active" | "paused" | "completed" | "error";
+export type CardStatus = "idle" | "in_progress" | "waiting" | "done";
 
 export interface Card {
   readonly name: string;
   readonly sessionUid: string;
   readonly status: CardStatus;
   readonly worktreeCreated: boolean;
+  readonly hasError: boolean;
   readonly github: GitHubInfo;
   readonly createdAt: string;
   readonly updatedAt: string;

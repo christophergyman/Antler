@@ -2,9 +2,9 @@ import { createCard } from '@core/card';
 import type { Card } from '@core/types/card';
 
 export const mockCards: Card[] = [
-  // === ACTIVE (3 cards) ===
+  // === IN_PROGRESS (3 cards) ===
   createCard({
-    status: 'active',
+    status: 'in_progress',
     github: {
       issueNumber: 1,
       title: 'Add user authentication',
@@ -14,7 +14,7 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'active',
+    status: 'in_progress',
     github: {
       issueNumber: 5,
       title: 'Implement dark mode toggle',
@@ -24,7 +24,8 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'active',
+    status: 'waiting',
+    hasError: true, // Error cards must be in Waiting
     github: {
       issueNumber: 9,
       title: 'Add keyboard shortcuts',
@@ -66,9 +67,9 @@ export const mockCards: Card[] = [
     },
   }),
 
-  // === PAUSED (2 cards) ===
+  // === WAITING (2 cards) ===
   createCard({
-    status: 'paused',
+    status: 'waiting',
     github: {
       issueNumber: 4,
       title: 'Migrate to PostgreSQL',
@@ -78,7 +79,8 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'paused',
+    status: 'waiting',
+    hasError: true, // Testing error badge
     github: {
       issueNumber: 8,
       title: 'Add real-time collaboration',
@@ -88,9 +90,9 @@ export const mockCards: Card[] = [
     },
   }),
 
-  // === COMPLETED (3 cards) ===
+  // === DONE (3 cards) ===
   createCard({
-    status: 'completed',
+    status: 'done',
     github: {
       issueNumber: 3,
       title: 'Update dependencies',
@@ -100,7 +102,7 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'completed',
+    status: 'done',
     github: {
       issueNumber: 7,
       title: 'Fix memory leak in dashboard',
@@ -110,25 +112,13 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'completed',
+    status: 'done',
     github: {
       issueNumber: 11,
       title: 'Add API documentation',
       body: 'Document all REST endpoints with OpenAPI spec',
       labels: ['docs'],
       state: 'closed',
-    },
-  }),
-
-  // === ERROR (1 card) ===
-  createCard({
-    status: 'error',
-    github: {
-      issueNumber: 12,
-      title: 'CI pipeline broken',
-      body: 'Tests failing due to flaky integration test in auth module',
-      labels: ['bug', 'ci', 'priority:high'],
-      state: 'open',
     },
   }),
 ];

@@ -13,20 +13,28 @@ export function filterByStatus(cards: readonly Card[], status: CardStatus): Card
   return cards.filter((card) => card.status === status);
 }
 
-export function filterActive(cards: readonly Card[]): Card[] {
-  return filterByStatus(cards, "active");
+export function filterInProgress(cards: readonly Card[]): Card[] {
+  return filterByStatus(cards, "in_progress");
 }
 
 export function filterIdle(cards: readonly Card[]): Card[] {
   return filterByStatus(cards, "idle");
 }
 
-export function filterCompleted(cards: readonly Card[]): Card[] {
-  return filterByStatus(cards, "completed");
+export function filterDone(cards: readonly Card[]): Card[] {
+  return filterByStatus(cards, "done");
 }
 
-export function filterPaused(cards: readonly Card[]): Card[] {
-  return filterByStatus(cards, "paused");
+export function filterWaiting(cards: readonly Card[]): Card[] {
+  return filterByStatus(cards, "waiting");
+}
+
+export function filterWithError(cards: readonly Card[]): Card[] {
+  return cards.filter((card) => card.hasError);
+}
+
+export function filterWithoutError(cards: readonly Card[]): Card[] {
+  return cards.filter((card) => !card.hasError);
 }
 
 export function filterWithWorktree(cards: readonly Card[]): Card[] {
@@ -206,10 +214,9 @@ export function sortByIssueNumber(
 export function countByStatus(cards: readonly Card[]): Record<CardStatus, number> {
   const counts: Record<CardStatus, number> = {
     idle: 0,
-    active: 0,
-    paused: 0,
-    completed: 0,
-    error: 0,
+    in_progress: 0,
+    waiting: 0,
+    done: 0,
   };
   for (const card of cards) {
     counts[card.status]++;
@@ -220,10 +227,9 @@ export function countByStatus(cards: readonly Card[]): Record<CardStatus, number
 export function groupByStatus(cards: readonly Card[]): Record<CardStatus, Card[]> {
   const groups: Record<CardStatus, Card[]> = {
     idle: [],
-    active: [],
-    paused: [],
-    completed: [],
-    error: [],
+    in_progress: [],
+    waiting: [],
+    done: [],
   };
   for (const card of cards) {
     groups[card.status].push(card);

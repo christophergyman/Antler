@@ -13,6 +13,7 @@ interface UseCardsOptions {
 
 interface UseCardsReturn {
   cards: Card[];
+  setCards: React.Dispatch<React.SetStateAction<Card[]>>;
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
@@ -91,5 +92,5 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSource]);
 
-  return { cards, isLoading, isRefreshing, error, errorCode, refresh: fetchCards };
+  return { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh: fetchCards };
 }

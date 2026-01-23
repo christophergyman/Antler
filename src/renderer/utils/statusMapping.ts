@@ -4,12 +4,11 @@ import type { StatusType } from '../constants/status';
 export function mapCardStatusToStatusType(status: CardStatus): StatusType {
   switch (status) {
     case 'idle':
-    case 'active':
-    case 'completed':
+    case 'done':
       return 'green';
-    case 'paused':
+    case 'in_progress':
+      return 'green';
+    case 'waiting':
       return 'yellow';
-    case 'error':
-      return 'red';
   }
 }
