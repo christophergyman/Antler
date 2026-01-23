@@ -85,31 +85,36 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
 
   try {
     const command = Command.create("run-gh", args);
-    const child = await command.spawn();
 
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let child: Awaited<ReturnType<typeof command.spawn>> | null = null;
 
-    // Set up timeout to kill the process
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, timeoutMs);
-
-    // Collect output from stdout/stderr
-    child.stdout.on("data", (data) => {
+    // Set up listeners BEFORE spawning (Tauri v2 API)
+    command.stdout.on("data", (data) => {
       stdout += data;
     });
-    child.stderr.on("data", (data) => {
+    command.stderr.on("data", (data) => {
       stderr += data;
     });
 
     // Wait for process to exit
-    const status = await new Promise<number | null>((resolve) => {
-      child.on("close", (data) => resolve(data.code));
-      child.on("error", () => resolve(null));
+    const exitPromise = new Promise<number | null>((resolve) => {
+      command.on("close", (data) => resolve(data.code));
+      command.on("error", () => resolve(null));
     });
+
+    // Spawn the process
+    child = await command.spawn();
+
+    // Set up timeout to kill the process
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      child?.kill();
+    }, timeoutMs);
+
+    const status = await exitPromise;
 
     // Clear timeout if command completed
     clearTimeout(timeoutId);

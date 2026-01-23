@@ -22,12 +22,37 @@
         }
       ]
     },
-    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "run-gh",
+          "cmd": "gh",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-pwd",
+          "cmd": "pwd",
+          "args": false,
+          "sidecar": false
+        }
+      ]
+    },
     "shell:allow-kill",
     "fs:default",
-    "fs:allow-read",
-    "fs:allow-exists",
-    "fs:read-all",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-read",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-read-recursive",
     "core:path:default"

@@ -91,26 +91,58 @@ async function getCurrentDir(): Promise<string> {
 }
 
 /**
- * Load config from current working directory
+ * Get parent directory path (resolves without using ../)
+ */
+function getParentDir(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  segments.pop();
+  return "/" + segments.join("/");
+}
+
+/**
+ * Find config file path, checking cwd and parent directory
+ * Handles the case where pwd returns src-tauri/ in dev mode
+ */
+async function findConfigPath(): Promise<string | null> {
+  const cwd = await getCurrentDir();
+
+  // Check cwd first (normal case)
+  const cwdPath = `${cwd}/${CONFIG_FILENAME}`;
+  if (await exists(cwdPath)) {
+    logConfig("debug", "Config found in cwd", { path: cwdPath });
+    return cwdPath;
+  }
+
+  // Check parent directory (handles src-tauri/ case in dev mode)
+  const parentDir = getParentDir(cwd);
+  const parentPath = `${parentDir}/${CONFIG_FILENAME}`;
+  if (await exists(parentPath)) {
+    logConfig("debug", "Config found in parent directory", { path: parentPath });
+    return parentPath;
+  }
+
+  logConfig("debug", "Config not found", { checked: [cwdPath, parentPath] });
+  return null;
+}
+
+/**
+ * Load config from current working directory or parent
  * Uses the directory where the app was launched (project root in typical usage)
  */
 export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
   logConfig("debug", "Loading config");
 
   try {
-    // Use current working directory - where the app was launched from
-    const cwd = await getCurrentDir();
-    const configPath = `${cwd}/${CONFIG_FILENAME}`;
+    const configPath = await findConfigPath();
 
-    const fileExists = await exists(configPath);
-
-    if (!fileExists) {
-      logConfig("warn", "Config file not found", { path: configPath });
+    if (!configPath) {
+      const cwd = await getCurrentDir();
+      logConfig("warn", "Config file not found", { cwd });
       return err(
         createConfigError(
           "config_not_found",
           "Config file not found. Create antler.yaml in project root",
-          `Expected: ${configPath}`
+          `Checked: ${cwd}/${CONFIG_FILENAME} and parent directory`
         )
       );
     }
