@@ -37,6 +37,11 @@
 }
 
 /* Custom scrollbar for labels */
+.labels-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
 .labels-scroll::-webkit-scrollbar {
   height: 4px;
 }
