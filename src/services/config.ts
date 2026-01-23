@@ -8,6 +8,7 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { load } from "js-yaml";
 import type { ConfigResult } from "@core/types/result";
 import { ok, err, createConfigError } from "@core/types/result";
+import { logConfig } from "./logging";
 
 // ============================================================================
 // Types
@@ -94,6 +95,8 @@ async function getCurrentDir(): Promise<string> {
  * Uses the directory where the app was launched (project root in typical usage)
  */
 export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
+  logConfig("debug", "Loading config");
+
   try {
     // Use current working directory - where the app was launched from
     const cwd = await getCurrentDir();
@@ -102,6 +105,7 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
     const fileExists = await exists(configPath);
 
     if (!fileExists) {
+      logConfig("warn", "Config file not found", { path: configPath });
       return err(
         createConfigError(
           "config_not_found",
@@ -117,6 +121,7 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
     try {
       parsed = load(fileContent);
     } catch (error) {
+      logConfig("error", "Failed to parse YAML config", { error: error instanceof Error ? error.message : String(error) });
       return err(
         createConfigError(
           "config_parse_error",
@@ -126,8 +131,15 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
       );
     }
 
-    return validateConfig(parsed);
+    const result = validateConfig(parsed);
+    if (result.ok) {
+      logConfig("info", "Config loaded successfully", { repo: result.value.github.repository });
+    } else {
+      logConfig("error", "Config validation failed", { code: result.error.code });
+    }
+    return result;
   } catch (error) {
+    logConfig("error", "Failed to read config file", { error: error instanceof Error ? error.message : String(error) });
     return err(
       createConfigError(
         "config_not_found",

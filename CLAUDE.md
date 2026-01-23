@@ -72,6 +72,7 @@ Key configuration files in `src-tauri/`:
 **Current permissions:**
 - `shell:allow-execute` - Execute shell commands (scoped to `gh` only)
 - `fs:allow-read`, `fs:allow-exists` - Read files (for config loading)
+- `fs:allow-write`, `fs:allow-mkdir`, `fs:allow-remove` - Write files (for logging)
 - `path:default` - Access path utilities
 
 **Shell plugin scope:** Only the `gh` command is allowed. To add other commands, update `plugins.shell.scope` in `tauri.conf.json`.
@@ -84,7 +85,7 @@ Key configuration files in `src-tauri/`:
 
 ### Directory Structure
 - **src/core/** - Shared TypeScript (Card types, operations, utilities)
-- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts)
+- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts, logging.ts)
 - **src/renderer/** - React components and hooks
   - `components/` - KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
   - `hooks/` - useCards, useKanbanBoard, useDataSource
@@ -147,6 +148,68 @@ type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 - Use `err(error)` to return failure
 - Check `result.ok` before accessing `result.value` or `result.error`
 - Specific result types: `ConfigResult<T>`, `GitHubResult<T>`
+
+## Logging System
+
+The app uses a three-layer logging system: console output (development), DevTools visibility, and file persistence.
+
+### Log Levels
+
+| Level | Use Case |
+|-------|----------|
+| `debug` | Detailed diagnostic info (gh commands, internal operations) |
+| `info` | Normal operations (app start, data refresh, status changes) |
+| `warn` | Recoverable issues (config not found, retry scenarios) |
+| `error` | Failures (network errors, parse errors, command failures) |
+
+### Log Categories
+
+| Category | Use Case |
+|----------|----------|
+| `system` | App lifecycle (start, shutdown, initialization) |
+| `config` | Config loading and validation |
+| `data_sync` | GitHub API calls, data fetching |
+| `user_action` | User interactions (card moves, toggles, refreshes) |
+| `performance` | Timing metrics |
+
+### Usage
+
+```typescript
+import { logSystem, logConfig, logDataSync, logUserAction, logPerformance } from '@services/logging';
+
+// Category-specific logging
+logSystem('info', 'App started');
+logConfig('error', 'Config validation failed', { code: 'config_invalid' });
+logDataSync('debug', 'Fetching issues', { repo: 'owner/repo' });
+logUserAction('card_status_change', 'Card moved', { cardId, from, to });
+logPerformance('Data fetch completed', 1234);
+
+// Convenience functions
+logCardStatusChange(cardId, 'idle', 'in_progress');
+logDataRefresh('github', 15);
+
+// Quick logging (defaults to system category)
+debug('Diagnostic info');
+info('Normal operation');
+warn('Recoverable issue');
+error('Failure occurred');
+```
+
+### Log Files
+
+**Location:** Platform-specific app data directory
+- macOS: `~/Library/Application Support/com.antler.app/logs/`
+- Windows: `%APPDATA%/com.antler.app/logs/`
+- Linux: `~/.config/com.antler.app/logs/`
+
+**Format:** `antler-YYYY-MM-DD.log` (one file per day)
+
+**Retention:** 5 most recent files (~25MB max)
+
+**Line format:**
+```
+2024-01-23T14:30:45.123Z INFO  [user_action]   Card moved from idle to in_progress {"cardId":"abc-123"}
+```
 
 ## Key Patterns
 

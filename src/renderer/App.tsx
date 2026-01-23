@@ -1,10 +1,11 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
+import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 
 function ActionButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
@@ -65,6 +66,14 @@ export default function App() {
   const { dataSource, setDataSource, isMock } = useDataSource();
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
+
+  useEffect(() => {
+    initLogger();
+    logSystem('info', 'App started');
+    return () => {
+      shutdownLogger();
+    };
+  }, []);
 
   const renderContent = () => {
     if (isLoading) {
