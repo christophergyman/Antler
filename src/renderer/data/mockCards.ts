@@ -24,8 +24,8 @@ export const mockCards: Card[] = [
     },
   }),
   createCard({
-    status: 'in_progress',
-    hasError: true, // Testing error badge
+    status: 'waiting',
+    hasError: true, // Error cards must be in Waiting
     github: {
       issueNumber: 9,
       title: 'Add keyboard shortcuts',

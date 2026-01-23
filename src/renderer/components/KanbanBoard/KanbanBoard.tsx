@@ -2,13 +2,14 @@ import { useState, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Card, CardStatus } from '@core/types/card';
@@ -24,6 +25,7 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -55,10 +57,36 @@ export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
     [findCard]
   );
 
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { over } = event;
+      if (!over) {
+        setActiveColumnId(null);
+        return;
+      }
+
+      const overId = over.id as string;
+
+      // If over a column directly
+      if (KANBAN_COLUMNS.some((col) => col.id === overId)) {
+        setActiveColumnId(overId);
+        return;
+      }
+
+      // If over a card, find which column it's in
+      const card = findCard(overId);
+      if (card) {
+        setActiveColumnId(card.status);
+      }
+    },
+    [findCard]
+  );
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveCard(null);
+      setActiveColumnId(null);
 
       if (!over) return;
 
@@ -92,8 +120,9 @@ export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-4 overflow-x-auto pb-4 px-6 min-h-0 flex-1">
@@ -105,6 +134,7 @@ export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
             color={column.color}
             bgColor={column.bgColor}
             cards={cardsByStatus[column.id]}
+            isOver={activeColumnId === column.id}
           />
         ))}
       </div>

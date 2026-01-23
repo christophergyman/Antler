@@ -7,30 +7,16 @@ export function KanbanCard({ title, description, labels, hasError, isDragging }:
   return (
     <Card className={`w-full hover:shadow-lg transition-shadow cursor-grab ${isDragging ? 'shadow-xl rotate-2' : ''}`}>
       <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4 text-muted-foreground"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <circle cx="9" cy="5" r="1.5" />
-              <circle cx="9" cy="12" r="1.5" />
-              <circle cx="9" cy="19" r="1.5" />
-              <circle cx="15" cy="5" r="1.5" />
-              <circle cx="15" cy="12" r="1.5" />
-              <circle cx="15" cy="19" r="1.5" />
-            </svg>
-          </div>
-          {hasError && (
+        {hasError && (
+          <div className="flex justify-end mb-2">
             <Badge
               className="text-xs text-white"
               style={{ backgroundColor: ERROR_BADGE_COLOR }}
             >
               Error
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
         <CardTitle className="text-base font-semibold">{title}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
