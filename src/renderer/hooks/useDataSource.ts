@@ -1,17 +1,13 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback } from 'react';
 
-type DataSource = "mock" | "github";
+export type DataSource = 'mock' | 'github';
 
-export function useDataSource() {
-  const [dataSource, setDataSourceState] = useState<DataSource>("github");
-
-  const setDataSource = useCallback((source: DataSource) => {
-    setDataSourceState(source);
-  }, []);
+export function useDataSource(initialSource: DataSource = 'github') {
+  const [dataSource, setDataSource] = useState<DataSource>(initialSource);
 
   return {
     dataSource,
-    setDataSource,
-    isMock: dataSource === "mock",
+    setDataSource: useCallback((s: DataSource) => setDataSource(s), []),
+    isMock: dataSource === 'mock',
   };
 }

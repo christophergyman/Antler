@@ -4,7 +4,7 @@ import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { mapCardStatusToStatusType } from './utils/statusMapping';
-import { Toggle } from '@core/components/ui/toggle';
+import { Toggle } from './components/ui/toggle';
 
 function ActionButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
@@ -113,6 +113,7 @@ export default function App() {
               title={card.github.title}
               description={card.github.body}
               status={mapCardStatusToStatusType(card.status)}
+              labels={card.github.labels}
             />
           ))}
         </div>
