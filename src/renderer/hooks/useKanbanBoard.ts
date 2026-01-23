@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Card, CardStatus } from '@core/types/card';
 import { setStatus, clearError } from '@core/card';
+import { logCardStatusChange } from '@services/logging';
 
 interface UseKanbanBoardOptions {
   cards: Card[];
@@ -17,6 +18,9 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       onCardsChange((prevCards) =>
         prevCards.map((card) => {
           if (card.sessionUid !== cardId) return card;
+
+          const oldStatus = card.status;
+          logCardStatusChange(cardId, oldStatus, newStatus);
 
           // Clear error when dragging out of Waiting
           if (card.hasError && newStatus !== 'waiting') {

@@ -4,6 +4,7 @@ import type { ConfigError, GitHubError } from '@core/types/result';
 import { getCachedConfig } from '@services/config';
 import { fetchIssuesWithPRs } from '@services/github';
 import { syncCards } from '@services/cardSync';
+import { logDataSync, logPerformance, logDataRefresh } from '@services/logging';
 import type { DataSource } from './useDataSource';
 import { mockCards } from '../data/mockCards';
 
@@ -40,6 +41,9 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
 
   const fetchCards = useCallback(async () => {
     const isInitial = !hasFetched.current;
+    const startTime = Date.now();
+
+    logDataSync('info', `Starting ${isInitial ? 'initial' : 'refresh'} fetch`, { dataSource });
 
     if (isInitial) {
       setIsLoading(true);
@@ -55,6 +59,8 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       hasFetched.current = true;
       setIsLoading(false);
       setIsRefreshing(false);
+      logDataRefresh('mock', mockCards.length);
+      logPerformance('Mock data loaded', Date.now() - startTime);
       return;
     }
 
@@ -62,14 +68,17 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       // Load config
       const configResult = await getCachedConfig();
       if (!configResult.ok) {
+        logDataSync('error', 'Config load failed', { code: configResult.error.code });
         setError(formatError(configResult.error));
         setErrorCode(configResult.error.code);
         return;
       }
 
       // Fetch GitHub issues with PRs
+      logDataSync('debug', 'Fetching GitHub issues', { repo: configResult.value.github.repository });
       const issuesResult = await fetchIssuesWithPRs(configResult.value.github.repository);
       if (!issuesResult.ok) {
+        logDataSync('error', 'GitHub fetch failed', { code: issuesResult.error.code });
         setError(formatError(issuesResult.error));
         setErrorCode(issuesResult.error.code);
         return;
@@ -78,8 +87,18 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       // Sync cards with fetched issues
       const syncResult = syncCards(cards, issuesResult.value);
       setCards(syncResult.cards);
+
+      logDataSync('info', 'Sync completed', {
+        created: syncResult.stats.created,
+        updated: syncResult.stats.updated,
+        preserved: syncResult.stats.preserved,
+      });
+      logDataRefresh('github', syncResult.cards.length);
+      logPerformance('GitHub data fetch', Date.now() - startTime);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      logDataSync('error', 'Unexpected fetch error', { error: errorMessage });
+      setError(errorMessage);
     } finally {
       hasFetched.current = true;
       setIsLoading(false);

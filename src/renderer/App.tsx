@@ -7,14 +7,33 @@ import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
 import { getCachedConfig } from '@services/config';
+import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 
-function ActionButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function ActionButton({
+  onClick,
+  children,
+  isLoading = false,
+  disabled = false
+}: {
+  onClick: () => void;
+  children: ReactNode;
+  isLoading?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
-      className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+      disabled={disabled || isLoading}
+      className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
     >
-      {children}
+      {isLoading ? (
+        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      ) : (
+        children
+      )}
     </button>
   );
 }
@@ -44,28 +63,48 @@ function Header({
   isMock,
   setDataSource,
   onRefresh,
-  repository
+  repository,
+  isRefreshing
 }: {
   isMock: boolean;
   setDataSource: (source: "mock" | "github") => void;
   onRefresh: () => void;
   repository: string | null;
+  isRefreshing: boolean;
 }) {
   return (
-    <div className="p-6 flex items-center justify-between shrink-0">
-      <div className="flex items-center gap-4">
-        <Toggle
-          pressed={isMock}
-          onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
-          className={isMock ? "text-amber-600" : "text-green-600"}
+    <div className="px-6 pt-6 pb-2 shrink-0">
+      {/* Match board width: 4 columns × 18rem + 3 gaps × 1rem = 75rem, but allow shrinking */}
+      <div className="flex items-center justify-between w-full max-w-[calc(4*18rem+3*1rem)]">
+        <div className="flex items-center gap-4">
+          <Toggle
+            pressed={isMock}
+            onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
+            className={isMock ? "text-amber-600" : "text-green-600"}
+          >
+            {isMock ? "Mock Data" : "GitHub"}
+          </Toggle>
+          {repository && (
+            <span className="text-gray-500 text-sm">{repository}</span>
+          )}
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="p-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Refresh"
         >
-          {isMock ? "Mock Data" : "GitHub"}
-        </Toggle>
-        {repository && (
-          <span className="text-gray-500 text-sm">{repository}</span>
-        )}
+          <svg
+            className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </button>
       </div>
-      <ActionButton onClick={onRefresh}>Refresh</ActionButton>
     </div>
   );
 }
@@ -87,6 +126,14 @@ export default function App() {
       setRepository(null);
     }
   }, [isMock]);
+
+  useEffect(() => {
+    initLogger();
+    logSystem('info', 'App started');
+    return () => {
+      shutdownLogger();
+    };
+  }, []);
 
   const renderContent = () => {
     if (isLoading) {
@@ -118,9 +165,6 @@ export default function App() {
             <ActionButton onClick={refresh}>Retry</ActionButton>
           </div>
         )}
-        {isRefreshing && (
-          <div className="mx-6 mb-4 text-gray-500 text-sm shrink-0">Refreshing...</div>
-        )}
         <KanbanBoard cards={cards} onCardStatusChange={handleCardStatusChange} />
       </>
     );
@@ -129,7 +173,7 @@ export default function App() {
   return (
     <DotBackground>
       <div className="h-screen flex flex-col overflow-hidden">
-        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} />
+        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} isRefreshing={isRefreshing} />
         {renderContent()}
       </div>
     </DotBackground>
