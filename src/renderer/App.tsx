@@ -6,6 +6,8 @@ import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
+import { NotificationProvider } from './context/NotificationContext';
+import { NotificationContainer } from './components/ui/NotificationContainer';
 import { getCachedConfig } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
@@ -183,11 +185,14 @@ export default function App() {
   };
 
   return (
-    <DotBackground>
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} isRefreshing={isRefreshing} />
-        {renderContent()}
-      </div>
-    </DotBackground>
+    <NotificationProvider>
+      <DotBackground>
+        <div className="h-screen flex flex-col overflow-hidden">
+          <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} isRefreshing={isRefreshing} />
+          {renderContent()}
+        </div>
+        <NotificationContainer />
+      </DotBackground>
+    </NotificationProvider>
   );
 }
