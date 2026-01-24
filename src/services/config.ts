@@ -203,3 +203,53 @@ export async function getCachedConfig(): Promise<ConfigResult<AntlerConfig>> {
 export function clearConfigCache(): void {
   cachedConfig = null;
 }
+
+// ============================================================================
+// Repository Root
+// ============================================================================
+
+let cachedRepoRoot: string | null = null;
+
+/**
+ * Get the repository root directory
+ * Uses `git rev-parse --show-toplevel` to find the actual git root
+ */
+export async function getCurrentRepoRoot(): Promise<ConfigResult<string>> {
+  if (cachedRepoRoot) {
+    return ok(cachedRepoRoot);
+  }
+
+  try {
+    const command = Command.create("run-git", ["rev-parse", "--show-toplevel"]);
+    const output = await command.execute();
+
+    if (output.code !== 0) {
+      logConfig("error", "Failed to get repo root", { stderr: output.stderr });
+      return err(
+        createConfigError(
+          "config_not_found",
+          "Not in a git repository",
+          output.stderr.trim()
+        )
+      );
+    }
+
+    cachedRepoRoot = output.stdout.trim();
+    logConfig("debug", "Found repo root", { path: cachedRepoRoot });
+    return ok(cachedRepoRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to execute git command", { error: message });
+    return err(
+      createConfigError(
+        "config_not_found",
+        "Failed to determine repository root",
+        message
+      )
+    );
+  }
+}
+
+export function clearRepoRootCache(): void {
+  cachedRepoRoot = null;
+}

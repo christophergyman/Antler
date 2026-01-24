@@ -19,6 +19,30 @@
           "cmd": "pwd",
           "args": false,
           "sidecar": false
+        },
+        {
+          "name": "run-git",
+          "cmd": "git",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-devcontainer",
+          "cmd": "devcontainer",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-docker",
+          "cmd": "docker",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-colima",
+          "cmd": "colima",
+          "args": true,
+          "sidecar": false
         }
       ]
     },
@@ -36,6 +60,30 @@
           "cmd": "pwd",
           "args": false,
           "sidecar": false
+        },
+        {
+          "name": "run-git",
+          "cmd": "git",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-devcontainer",
+          "cmd": "devcontainer",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-docker",
+          "cmd": "docker",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-colima",
+          "cmd": "colima",
+          "args": true,
+          "sidecar": false
         }
       ]
     },
@@ -43,18 +91,19 @@
     "fs:default",
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$HOME/**" }]
+      "allow": [{ "path": "/**" }]
     },
     {
       "identifier": "fs:allow-read",
-      "allow": [{ "path": "$HOME/**" }]
+      "allow": [{ "path": "/**" }]
     },
     {
       "identifier": "fs:allow-read-text-file",
-      "allow": [{ "path": "$HOME/**" }]
+      "allow": [{ "path": "/**" }]
     },
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-read-recursive",
-    "core:path:default"
+    "core:path:default",
+    "os:default"
   ]
 }

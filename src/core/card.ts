@@ -10,16 +10,17 @@ import { generateUid, generateName, isValidUid } from "./utils/uid";
 // Re-export types for convenience
 export type { GitHubInfo, GitHubComment, GitHubPR, LinkedIssue } from "./types/github";
 export type { CIStatus } from "./types/ci";
-export type { Card, CardStatus } from "./types/card";
+export type { Card, CardStatus, WorktreeOperation } from "./types/card";
 
 // Import Card type for internal use
-import type { Card, CardStatus } from "./types/card";
+import type { Card, CardStatus, WorktreeOperation } from "./types/card";
 
 // ============================================================================
 // Validation
 // ============================================================================
 
 const VALID_STATUSES: readonly CardStatus[] = ["idle", "in_progress", "waiting", "done"];
+const VALID_WORKTREE_OPERATIONS: readonly WorktreeOperation[] = ["idle", "creating", "removing", "error"];
 
 function validateCardObject(obj: unknown): asserts obj is Record<string, unknown> {
   if (!obj || typeof obj !== "object") {
@@ -59,6 +60,26 @@ function validateCardObject(obj: unknown): asserts obj is Record<string, unknown
   if (typeof o.updatedAt !== "string") {
     throw new Error("Invalid card: updatedAt must be an ISO timestamp string");
   }
+
+  if (o.worktreePath !== null && typeof o.worktreePath !== "string") {
+    throw new Error("Invalid card: worktreePath must be a string or null");
+  }
+
+  if (typeof o.worktreeOperation !== "string" || !VALID_WORKTREE_OPERATIONS.includes(o.worktreeOperation as WorktreeOperation)) {
+    throw new Error(`Invalid card: worktreeOperation must be one of ${VALID_WORKTREE_OPERATIONS.join("|")}`);
+  }
+
+  if (o.worktreeError !== null && typeof o.worktreeError !== "string") {
+    throw new Error("Invalid card: worktreeError must be a string or null");
+  }
+
+  if (typeof o.devcontainerRunning !== "boolean") {
+    throw new Error("Invalid card: devcontainerRunning must be a boolean");
+  }
+
+  if (o.devcontainerPort !== null && typeof o.devcontainerPort !== "number") {
+    throw new Error("Invalid card: devcontainerPort must be a number or null");
+  }
 }
 
 // ============================================================================
@@ -71,6 +92,11 @@ export interface CreateCardOptions {
   worktreeCreated?: boolean;
   hasError?: boolean;
   github?: Partial<GitHubInfo>;
+  worktreePath?: string | null;
+  worktreeOperation?: WorktreeOperation;
+  worktreeError?: string | null;
+  devcontainerRunning?: boolean;
+  devcontainerPort?: number | null;
 }
 
 export function createCard(options: CreateCardOptions = {}): Card {
@@ -85,6 +111,11 @@ export function createCard(options: CreateCardOptions = {}): Card {
     github: createGitHubInfo(options.github),
     createdAt: now,
     updatedAt: now,
+    worktreePath: options.worktreePath ?? null,
+    worktreeOperation: options.worktreeOperation ?? "idle",
+    worktreeError: options.worktreeError ?? null,
+    devcontainerRunning: options.devcontainerRunning ?? false,
+    devcontainerPort: options.devcontainerPort ?? null,
   });
 }
 
@@ -168,6 +199,78 @@ export function markWorktreeRemoved(card: Card): Card {
 }
 
 // ============================================================================
+// Worktree State Helpers
+// ============================================================================
+
+export function setWorktreeOperation(card: Card, operation: WorktreeOperation): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, worktreeOperation: operation }));
+}
+
+export function setWorktreePath(card: Card, path: string | null): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, worktreePath: path }));
+}
+
+export function setWorktreeError(card: Card, error: string | null): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, worktreeError: error }));
+}
+
+export function setDevcontainerRunning(card: Card, running: boolean): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, devcontainerRunning: running }));
+}
+
+export function setDevcontainerPort(card: Card, port: number | null): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, devcontainerPort: port }));
+}
+
+export function startWorktreeCreation(card: Card): Card {
+  return touchUpdatedAt(Object.freeze({
+    ...card,
+    worktreeOperation: "creating" as WorktreeOperation,
+    worktreeError: null,
+  }));
+}
+
+export function completeWorktreeCreation(card: Card, path: string, port: number): Card {
+  return touchUpdatedAt(Object.freeze({
+    ...card,
+    worktreeCreated: true,
+    worktreePath: path,
+    worktreeOperation: "idle" as WorktreeOperation,
+    worktreeError: null,
+    devcontainerRunning: true,
+    devcontainerPort: port,
+  }));
+}
+
+export function startWorktreeRemoval(card: Card): Card {
+  return touchUpdatedAt(Object.freeze({
+    ...card,
+    worktreeOperation: "removing" as WorktreeOperation,
+    worktreeError: null,
+  }));
+}
+
+export function completeWorktreeRemoval(card: Card): Card {
+  return touchUpdatedAt(Object.freeze({
+    ...card,
+    worktreeCreated: false,
+    worktreePath: null,
+    worktreeOperation: "idle" as WorktreeOperation,
+    worktreeError: null,
+    devcontainerRunning: false,
+    devcontainerPort: null,
+  }));
+}
+
+export function setWorktreeErrorState(card: Card, error: string): Card {
+  return touchUpdatedAt(Object.freeze({
+    ...card,
+    worktreeOperation: "error" as WorktreeOperation,
+    worktreeError: error,
+  }));
+}
+
+// ============================================================================
 // Predicates
 // ============================================================================
 
@@ -203,6 +306,26 @@ export function hasIssue(card: Card): boolean {
   return card.github.issueNumber !== null;
 }
 
+export function isWorktreeCreating(card: Card): boolean {
+  return card.worktreeOperation === "creating";
+}
+
+export function isWorktreeRemoving(card: Card): boolean {
+  return card.worktreeOperation === "removing";
+}
+
+export function hasWorktreeError(card: Card): boolean {
+  return card.worktreeOperation === "error";
+}
+
+export function isWorktreeOperationInProgress(card: Card): boolean {
+  return card.worktreeOperation === "creating" || card.worktreeOperation === "removing";
+}
+
+export function isDevcontainerRunning(card: Card): boolean {
+  return card.devcontainerRunning;
+}
+
 // ============================================================================
 // Serialization
 // ============================================================================
@@ -224,6 +347,11 @@ export function fromJSON(json: string): Card {
     github: createGitHubInfo(parsed.github as Partial<GitHubInfo>),
     createdAt: parsed.createdAt as string,
     updatedAt: parsed.updatedAt as string,
+    worktreePath: parsed.worktreePath as string | null,
+    worktreeOperation: parsed.worktreeOperation as WorktreeOperation,
+    worktreeError: parsed.worktreeError as string | null,
+    devcontainerRunning: parsed.devcontainerRunning as boolean,
+    devcontainerPort: parsed.devcontainerPort as number | null,
   });
 }
 
@@ -250,6 +378,11 @@ export function fromJSONArray(json: string): Card[] {
         github: createGitHubInfo(item.github as Partial<GitHubInfo>),
         createdAt: item.createdAt as string,
         updatedAt: item.updatedAt as string,
+        worktreePath: item.worktreePath as string | null,
+        worktreeOperation: item.worktreeOperation as WorktreeOperation,
+        worktreeError: item.worktreeError as string | null,
+        devcontainerRunning: item.devcontainerRunning as boolean,
+        devcontainerPort: item.devcontainerPort as number | null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";

@@ -249,6 +249,34 @@ export function logUserAction(action: UserActionType, message: string, context?:
   log("info", "user_action", message, { ...context, action });
 }
 
+/**
+ * Log worktree operations
+ */
+export function logWorktree(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  log(level, "worktree", message, context);
+}
+
+/**
+ * Log devcontainer operations
+ */
+export function logDevcontainer(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  log(level, "devcontainer", message, context);
+}
+
+/**
+ * Log Docker runtime events
+ */
+export function logDocker(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  log(level, "docker", message, context);
+}
+
+/**
+ * Log prerequisites checks
+ */
+export function logPrerequisites(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  log(level, "prerequisites", message, context);
+}
+
 // ============================================================================
 // Convenience Logging Functions
 // ============================================================================
