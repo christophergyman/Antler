@@ -125,7 +125,7 @@ export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4 px-6 min-h-0 flex-1">
+      <div className="flex flex-col md:flex-row gap-4 overflow-y-auto md:overflow-x-auto pb-4 px-6 min-h-0 flex-1 md:justify-center">
         {KANBAN_COLUMNS.map((column) => (
           <KanbanColumn
             key={column.id}
