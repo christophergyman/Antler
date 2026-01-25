@@ -4,7 +4,7 @@
  */
 
 import { Command } from "@tauri-apps/plugin-shell";
-import { exists } from "@tauri-apps/plugin-fs";
+import { exists, readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import type { DevcontainerResult } from "@core/types/result";
 import { ok, err, createDevcontainerError } from "@core/types/result";
 import { logDevcontainer } from "./logging";
@@ -22,8 +22,8 @@ const BASE_PORT = 3000;
 /** Maximum port for devcontainer allocation */
 const MAX_PORT = 3100;
 
-/** Devcontainer config path relative to workspace */
-const DEVCONTAINER_CONFIG_PATH = ".devcontainer/devcontainer.json";
+/** Devcontainer config paths to check (in order of priority) */
+const CONFIG_PATHS = ["devcontainer.json", ".devcontainer/devcontainer.json"];
 
 // ============================================================================
 // CLI Checks
@@ -130,18 +130,121 @@ export async function checkDockerRunning(): Promise<DevcontainerResult<void>> {
 }
 
 // ============================================================================
-// Config Check
+// Config Management
 // ============================================================================
+
+/**
+ * Get the path where devcontainer config exists or should be created
+ * Returns the first existing config path, or the root path if none exists
+ */
+export async function getDevcontainerConfigPath(workspacePath: string): Promise<string> {
+  for (const relativePath of CONFIG_PATHS) {
+    const fullPath = `${workspacePath}/${relativePath}`;
+    try {
+      if (await exists(fullPath)) {
+        return fullPath;
+      }
+    } catch {
+      // Continue checking other paths
+    }
+  }
+  // Default to root devcontainer.json if none exists
+  return `${workspacePath}/${CONFIG_PATHS[0]}`;
+}
 
 /**
  * Check if workspace has a devcontainer configuration
  */
 export async function hasDevcontainerConfig(workspacePath: string): Promise<boolean> {
-  const configPath = `${workspacePath}/${DEVCONTAINER_CONFIG_PATH}`;
+  for (const relativePath of CONFIG_PATHS) {
+    const fullPath = `${workspacePath}/${relativePath}`;
+    try {
+      if (await exists(fullPath)) {
+        return true;
+      }
+    } catch {
+      // Continue checking other paths
+    }
+  }
+  return false;
+}
+
+/**
+ * Read devcontainer config content
+ */
+export async function readDevcontainerConfig(workspacePath: string): Promise<DevcontainerResult<string>> {
+  logDevcontainer("debug", "Reading devcontainer config", { workspacePath });
+
   try {
-    return await exists(configPath);
-  } catch {
-    return false;
+    const configPath = await getDevcontainerConfigPath(workspacePath);
+
+    // Check if the file exists
+    if (!(await exists(configPath))) {
+      return err(
+        createDevcontainerError(
+          "no_devcontainer_config",
+          "No devcontainer.json found",
+          `Checked paths: ${CONFIG_PATHS.join(", ")}`
+        )
+      );
+    }
+
+    const content = await readTextFile(configPath);
+    logDevcontainer("debug", "Devcontainer config read successfully", { configPath });
+    return ok(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logDevcontainer("error", "Failed to read devcontainer config", { error: message });
+    return err(
+      createDevcontainerError(
+        "no_devcontainer_config",
+        "Failed to read devcontainer config",
+        message
+      )
+    );
+  }
+}
+
+/**
+ * Save devcontainer config content
+ */
+export async function saveDevcontainerConfig(
+  workspacePath: string,
+  content: string
+): Promise<DevcontainerResult<void>> {
+  logDevcontainer("info", "Saving devcontainer config", { workspacePath });
+
+  try {
+    // Always save to root devcontainer.json for new configs
+    const configPath = `${workspacePath}/${CONFIG_PATHS[0]}`;
+
+    // Check if we need to update an existing config in .devcontainer/
+    const existingPath = await getDevcontainerConfigPath(workspacePath);
+    const targetPath = (await exists(existingPath)) ? existingPath : configPath;
+
+    // Create parent directory if needed (for .devcontainer/)
+    if (targetPath.includes(".devcontainer/")) {
+      const dirPath = targetPath.substring(0, targetPath.lastIndexOf("/"));
+      try {
+        await mkdir(dirPath, { recursive: true });
+      } catch {
+        // Directory might already exist
+      }
+    }
+
+    await writeTextFile(targetPath, content);
+    logDevcontainer("info", "Devcontainer config saved successfully", { targetPath });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logDevcontainer("error", "Failed to save devcontainer config", { error: message });
+    return err(
+      createDevcontainerError(
+        "devcontainer_start_failed", // Reusing existing error code
+        "Failed to save devcontainer config",
+        message
+      )
+    );
   }
 }
 
@@ -251,7 +354,7 @@ export async function startDevcontainer(
       createDevcontainerError(
         "no_devcontainer_config",
         "No devcontainer.json found",
-        `Expected config at ${workspacePath}/${DEVCONTAINER_CONFIG_PATH}`
+        `Expected config at ${workspacePath}/devcontainer.json or ${workspacePath}/.devcontainer/devcontainer.json`
       )
     );
   }

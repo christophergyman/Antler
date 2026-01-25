@@ -6,7 +6,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { getCachedConfig, getCurrentRepoRoot, clearConfigCache } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
-import { hasDevcontainerConfig } from "@services/devcontainer";
+import {
+  hasDevcontainerConfig,
+  readDevcontainerConfig,
+  saveDevcontainerConfig as saveDevcontainerConfigService,
+  getDevcontainerConfigPath,
+} from "@services/devcontainer";
 import { getDockerRuntimeStatus, onDockerRuntimeStatusChange } from "@services/dockerRuntime";
 import type { DockerRuntimeStatus } from "@services/dockerRuntime";
 
@@ -25,6 +30,8 @@ interface SettingsState {
   isCheckingDocker: boolean;
   // Devcontainer
   hasDevcontainerConfig: boolean | null;
+  devcontainerConfig: string | null;
+  devcontainerConfigPath: string | null;
 }
 
 export function useSettings() {
@@ -38,6 +45,8 @@ export function useSettings() {
     dockerStatus: "unknown",
     isCheckingDocker: true,
     hasDevcontainerConfig: null,
+    devcontainerConfig: null,
+    devcontainerConfigPath: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -90,10 +99,33 @@ export function useSettings() {
   const checkDevcontainer = useCallback(async () => {
     const repoResult = await getCurrentRepoRoot();
     if (repoResult.ok) {
-      const hasConfig = await hasDevcontainerConfig(repoResult.value);
-      setState((prev) => ({ ...prev, hasDevcontainerConfig: hasConfig }));
+      const repoRoot = repoResult.value;
+      const hasConfig = await hasDevcontainerConfig(repoRoot);
+      const configPath = await getDevcontainerConfigPath(repoRoot);
+
+      if (hasConfig) {
+        const configResult = await readDevcontainerConfig(repoRoot);
+        setState((prev) => ({
+          ...prev,
+          hasDevcontainerConfig: true,
+          devcontainerConfig: configResult.ok ? configResult.value : null,
+          devcontainerConfigPath: configPath,
+        }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          hasDevcontainerConfig: false,
+          devcontainerConfig: null,
+          devcontainerConfigPath: configPath,
+        }));
+      }
     } else {
-      setState((prev) => ({ ...prev, hasDevcontainerConfig: null }));
+      setState((prev) => ({
+        ...prev,
+        hasDevcontainerConfig: null,
+        devcontainerConfig: null,
+        devcontainerConfigPath: null,
+      }));
     }
   }, []);
 
@@ -105,6 +137,21 @@ export function useSettings() {
     checkDocker();
     checkDevcontainer();
   }, [checkConfig, checkGitRepo, checkAuth, checkDocker, checkDevcontainer]);
+
+  const saveDevcontainerConfig = useCallback(async (content: string): Promise<void> => {
+    const repoResult = await getCurrentRepoRoot();
+    if (!repoResult.ok) {
+      throw new Error("No repository found");
+    }
+
+    const result = await saveDevcontainerConfigService(repoResult.value, content);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    // Refresh devcontainer state after save
+    await checkDevcontainer();
+  }, [checkDevcontainer]);
 
   // Subscribe to Docker status changes
   useEffect(() => {
@@ -122,5 +169,6 @@ export function useSettings() {
   return {
     ...state,
     refresh,
+    saveDevcontainerConfig,
   };
 }

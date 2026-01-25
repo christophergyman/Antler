@@ -8,7 +8,7 @@ import { Button } from "../ui/button";
 import type { SettingsPanelProps } from "./types";
 import { SettingsGroup } from "./SettingsGroup";
 import { GitRepoSection } from "./GitRepoSection";
-import { DevcontainerSection } from "./DevcontainerSection";
+import { DevcontainerEditorSection } from "./DevcontainerEditorSection";
 import { GitHubRepoSection } from "./GitHubRepoSection";
 import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
@@ -106,7 +106,16 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
               isLoading={settings.isCheckingDocker}
               onStatusChange={settings.refresh}
             />
-            <DevcontainerSection hasConfig={settings.hasDevcontainerConfig} />
+          </SettingsGroup>
+
+          {/* Devcontainer Editor Group */}
+          <SettingsGroup title="Devcontainer">
+            <DevcontainerEditorSection
+              hasConfig={settings.hasDevcontainerConfig}
+              configContent={settings.devcontainerConfig}
+              configPath={settings.devcontainerConfigPath}
+              onSave={settings.saveDevcontainerConfig}
+            />
           </SettingsGroup>
         </div>
       </div>
