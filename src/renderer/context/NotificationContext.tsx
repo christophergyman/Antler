@@ -12,16 +12,19 @@ import { setNotificationListener } from "@services/logging";
 // Configuration
 // ============================================================================
 
-const MAX_NOTIFICATIONS = 5;
+const MAX_ACTIVE_NOTIFICATIONS = 5;
+const MAX_HISTORY = 50;
 
 // ============================================================================
 // Context Types
 // ============================================================================
 
 interface NotificationContextValue {
-  notifications: readonly Notification[];
+  notifications: readonly Notification[];           // Active toasts
+  notificationHistory: readonly Notification[];     // All notifications (session)
   addNotification: (message: string, category: LogCategory, details?: string) => void;
   dismissNotification: (id: string) => void;
+  clearHistory: () => void;
 }
 
 // ============================================================================
@@ -36,18 +39,31 @@ const NotificationContext = createContext<NotificationContextValue | null>(null)
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<readonly Notification[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<readonly Notification[]>([]);
 
   const addNotification = useCallback((message: string, category: LogCategory, details?: string) => {
     const notification = createNotification(message, category, details);
+
+    // Add to active toasts
     setNotifications((prev) => {
       const updated = [notification, ...prev];
-      // Keep only the most recent notifications
-      return updated.slice(0, MAX_NOTIFICATIONS);
+      return updated.slice(0, MAX_ACTIVE_NOTIFICATIONS);
+    });
+
+    // Add to history (keep all, up to max)
+    setNotificationHistory((prev) => {
+      const updated = [notification, ...prev];
+      return updated.slice(0, MAX_HISTORY);
     });
   }, []);
 
   const dismissNotification = useCallback((id: string) => {
+    // Only removes from active toasts, history remains
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    setNotificationHistory([]);
   }, []);
 
   // Register the notification listener with the logging service
@@ -60,7 +76,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [addNotification]);
 
   return (
-    <NotificationContext.Provider value={{ notifications, addNotification, dismissNotification }}>
+    <NotificationContext.Provider value={{ notifications, notificationHistory, addNotification, dismissNotification, clearHistory }}>
       {children}
     </NotificationContext.Provider>
   );

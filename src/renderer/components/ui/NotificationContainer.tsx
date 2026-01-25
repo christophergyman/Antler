@@ -61,6 +61,7 @@ function NotificationItem({ id, category, message, details, onDismiss }: Notific
       onClick={handleClick}
       className={cn(
         "cursor-pointer transition-all duration-150 shadow-lg",
+        "bg-white/50",
         "animate-in fade-in slide-in-from-right-5",
         "hover:shadow-xl hover:scale-[1.02]",
         isExiting && "animate-out fade-out slide-out-to-right-5"
