@@ -103,6 +103,10 @@
     },
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-read-recursive",
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "/**" }]
+    },
     "core:path:default",
     "os:default"
   ]

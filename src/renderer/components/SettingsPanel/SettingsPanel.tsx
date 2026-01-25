@@ -1,0 +1,115 @@
+/**
+ * SettingsPanel Component
+ * Main overlay panel with grouped sections in Linear style
+ */
+
+import { useEffect, useCallback } from "react";
+import { Button } from "../ui/button";
+import type { SettingsPanelProps } from "./types";
+import { SettingsGroup } from "./SettingsGroup";
+import { GitRepoSection } from "./GitRepoSection";
+import { DevcontainerSection } from "./DevcontainerSection";
+import { GitHubRepoSection } from "./GitHubRepoSection";
+import { DockerSection } from "./DockerSection";
+import { GitHubAuthSection } from "./GitHubAuthSection";
+import { useSettings } from "../../hooks/useSettings";
+
+export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanelProps) {
+  const settings = useSettings();
+
+  // Handle Escape key
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.removeEventListener("keydown", handleKeyDown);
+      };
+    }
+  }, [isOpen, handleKeyDown]);
+
+  // Refresh settings when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      settings.refresh();
+    }
+  }, [isOpen]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleConfigChange = () => {
+    settings.refresh();
+    onConfigChange?.();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-xl bg-gray-50 rounded-xl shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h1 className="text-lg font-semibold text-gray-900">Settings</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8 text-gray-500 hover:text-gray-700"
+            aria-label="Close settings"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* GitHub Group */}
+          <SettingsGroup title="GitHub">
+            <GitHubRepoSection
+              currentRepo={settings.repository}
+              onSave={handleConfigChange}
+            />
+            <GitHubAuthSection
+              isAuthenticated={settings.isGitHubAuthenticated}
+              username={settings.gitHubUsername}
+              isLoading={settings.isCheckingAuth}
+              onAuthChange={settings.refresh}
+            />
+          </SettingsGroup>
+
+          {/* Development Environment Group */}
+          <SettingsGroup title="Development Environment">
+            <GitRepoSection isGitRepo={settings.isGitRepo} />
+            <DockerSection
+              status={settings.dockerStatus}
+              isLoading={settings.isCheckingDocker}
+              onStatusChange={settings.refresh}
+            />
+            <DevcontainerSection hasConfig={settings.hasDevcontainerConfig} />
+          </SettingsGroup>
+        </div>
+      </div>
+    </div>
+  );
+}

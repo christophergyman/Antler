@@ -6,7 +6,8 @@ import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
-import { getCachedConfig } from '@services/config';
+import { SettingsPanel } from './components/SettingsPanel';
+import { getCachedConfig, clearConfigCache } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
 
@@ -64,12 +65,14 @@ function Header({
   isMock,
   setDataSource,
   onRefresh,
+  onSettingsOpen,
   repository,
   isRefreshing
 }: {
   isMock: boolean;
   setDataSource: (source: "mock" | "github") => void;
   onRefresh: () => void;
+  onSettingsOpen: () => void;
   repository: string | null;
   isRefreshing: boolean;
 }) {
@@ -89,22 +92,45 @@ function Header({
             <span className="text-gray-500 text-sm">{repository}</span>
           )}
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="p-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Refresh"
-        >
-          <svg
-            className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`}
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onSettingsOpen}
+            className="p-2 text-white bg-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
+            aria-label="Settings"
           >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        </button>
+            <svg
+              className="h-5 w-5"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="p-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Refresh"
+          >
+            <svg
+              className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`}
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -115,6 +141,7 @@ export default function App() {
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
   const [repository, setRepository] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!isMock) {
@@ -182,12 +209,36 @@ export default function App() {
     );
   };
 
+  const handleConfigChange = () => {
+    clearConfigCache();
+    if (!isMock) {
+      getCachedConfig().then(result => {
+        if (result.ok) {
+          setRepository(result.value.github.repository);
+        }
+      });
+      refresh();
+    }
+  };
+
   return (
     <DotBackground>
       <div className="h-screen flex flex-col overflow-hidden">
-        <Header isMock={isMock} setDataSource={setDataSource} onRefresh={refresh} repository={repository} isRefreshing={isRefreshing} />
+        <Header
+          isMock={isMock}
+          setDataSource={setDataSource}
+          onRefresh={refresh}
+          onSettingsOpen={() => setIsSettingsOpen(true)}
+          repository={repository}
+          isRefreshing={isRefreshing}
+        />
         {renderContent()}
       </div>
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onConfigChange={handleConfigChange}
+      />
     </DotBackground>
   );
 }

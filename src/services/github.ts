@@ -196,6 +196,61 @@ async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<G
 }
 
 // ============================================================================
+// Authentication
+// ============================================================================
+
+/**
+ * Check if user is authenticated with GitHub CLI
+ * Returns username if authenticated, null if not
+ */
+export async function checkGitHubAuth(): Promise<GitHubResult<{ username: string } | null>> {
+  const result = await execGh(["auth", "status", "--hostname", "github.com"]);
+
+  if (!result.ok) {
+    // Not authenticated is expected, not an error for this function
+    if (result.error.code === "not_authenticated") {
+      return ok(null);
+    }
+    return result;
+  }
+
+  // Parse username from output - format includes "Logged in to github.com account <username>"
+  const match = result.value.match(/account\s+(\S+)/);
+  if (match && match[1]) {
+    return ok({ username: match[1] });
+  }
+
+  // Fallback: try to get username from gh api
+  const userResult = await execGh(["api", "user", "--jq", ".login"]);
+  if (userResult.ok) {
+    const username = userResult.value.trim();
+    if (username) {
+      return ok({ username });
+    }
+  }
+
+  // Authenticated but couldn't get username
+  return ok({ username: "authenticated" });
+}
+
+/**
+ * Initiate GitHub CLI authentication
+ * Opens browser for OAuth flow using --web flag (non-interactive)
+ */
+export async function initiateGitHubAuth(): Promise<GitHubResult<void>> {
+  logDataSync("info", "Initiating GitHub auth via browser");
+
+  const result = await execGh(["auth", "login", "--web", "--hostname", "github.com"], 120000);
+
+  if (!result.ok) {
+    return result;
+  }
+
+  logDataSync("info", "GitHub auth completed");
+  return ok(undefined);
+}
+
+// ============================================================================
 // Issue Fetching
 // ============================================================================
 

@@ -3,9 +3,9 @@
  * Loads and validates antler.yaml using Tauri FS plugin
  */
 
-import { readTextFile, exists } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
-import { load } from "js-yaml";
+import { load, dump } from "js-yaml";
 import type { ConfigResult } from "@core/types/result";
 import { ok, err, createConfigError } from "@core/types/result";
 import { logConfig } from "./logging";
@@ -177,6 +177,63 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
         "config_not_found",
         "Failed to read config file",
         error instanceof Error ? error.message : String(error)
+      )
+    );
+  }
+}
+
+// ============================================================================
+// Config Path
+// ============================================================================
+
+/**
+ * Get the config file path
+ * Returns the path where antler.yaml exists or should be created
+ */
+export async function getConfigFilePath(): Promise<string> {
+  const configPath = await findConfigPath();
+  if (configPath) {
+    return configPath;
+  }
+  // Default to cwd if not found
+  const cwd = await getCurrentDir();
+  return `${cwd}/${CONFIG_FILENAME}`;
+}
+
+// ============================================================================
+// Config Save
+// ============================================================================
+
+/**
+ * Save config to antler.yaml
+ */
+export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<void>> {
+  logConfig("debug", "Saving config");
+
+  // Validate before saving
+  const validation = validateConfig({ github: { repository: config.github.repository } });
+  if (!validation.ok) {
+    logConfig("error", "Config validation failed before save", { code: validation.error.code });
+    return validation;
+  }
+
+  try {
+    const configPath = await getConfigFilePath();
+    const yamlContent = dump({ github: { repository: config.github.repository } });
+
+    await writeTextFile(configPath, yamlContent);
+    clearConfigCache();
+
+    logConfig("info", "Config saved successfully", { path: configPath, repo: config.github.repository });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to save config", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Failed to save config file",
+        message
       )
     );
   }
