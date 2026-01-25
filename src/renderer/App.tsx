@@ -7,6 +7,9 @@ import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { Toggle } from './components/ui/toggle';
 import { SettingsPanel } from './components/SettingsPanel';
+import { NotificationProvider } from './context/NotificationContext';
+import { NotificationContainer } from './components/ui/NotificationContainer';
+import { NotificationPopover } from './components/ui/NotificationPopover';
 import { getCachedConfig, clearConfigCache } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
@@ -114,6 +117,7 @@ function Header({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+          <NotificationPopover />
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
@@ -222,23 +226,26 @@ export default function App() {
   };
 
   return (
-    <DotBackground>
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Header
-          isMock={isMock}
-          setDataSource={setDataSource}
-          onRefresh={refresh}
-          onSettingsOpen={() => setIsSettingsOpen(true)}
-          repository={repository}
-          isRefreshing={isRefreshing}
-        />
-        {renderContent()}
-      </div>
+    <NotificationProvider>
+      <DotBackground>
+        <div className="h-screen flex flex-col overflow-hidden">
+          <Header
+            isMock={isMock}
+            setDataSource={setDataSource}
+            onRefresh={refresh}
+            onSettingsOpen={() => setIsSettingsOpen(true)}
+            repository={repository}
+            isRefreshing={isRefreshing}
+          />
+          {renderContent()}
+        </div>
+        <NotificationContainer />
+      </DotBackground>
       <SettingsPanel
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onConfigChange={handleConfigChange}
       />
-    </DotBackground>
+    </NotificationProvider>
   );
 }

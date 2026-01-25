@@ -46,10 +46,17 @@ const DIM_STYLE = "color: #6b7280"; // gray
 const RESET_STYLE = "color: inherit";
 
 // ============================================================================
+// Types
+// ============================================================================
+
+type NotificationListener = (message: string, category: LogCategory, details?: string) => void;
+
+// ============================================================================
 // State
 // ============================================================================
 
 let isInitialized = false;
+let notificationListener: NotificationListener | null = null;
 
 // ============================================================================
 // Initialization
@@ -85,6 +92,31 @@ export async function shutdownLogger(): Promise<void> {
 
   logSystem("info", "Logger shutting down");
   isInitialized = false;
+}
+
+// ============================================================================
+// Notification Bridge
+// ============================================================================
+
+/**
+ * Set a listener that will receive error-level log notifications
+ * Returns an unsubscribe function
+ */
+export function setNotificationListener(listener: NotificationListener): () => void {
+  notificationListener = listener;
+  return () => {
+    notificationListener = null;
+  };
+}
+
+/**
+ * Emit a notification to the UI layer
+ */
+function emitNotification(message: string, category: LogCategory, context?: Record<string, unknown>): void {
+  if (notificationListener) {
+    const details = context ? JSON.stringify(context) : undefined;
+    notificationListener(message, category, details);
+  }
 }
 
 // ============================================================================
@@ -207,6 +239,11 @@ function log(level: LogLevel, category: LogCategory, message: string, context?: 
   // File output (async, fire-and-forget)
   if (isInitialized) {
     writeToFile(entry);
+  }
+
+  // Emit notification for error-level logs
+  if (level === "error") {
+    emitNotification(message, category, context);
   }
 }
 
