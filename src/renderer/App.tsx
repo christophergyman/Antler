@@ -10,6 +10,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { NotificationProvider } from './context/NotificationContext';
 import { NotificationContainer } from './components/ui/NotificationContainer';
 import { NotificationPopover } from './components/ui/NotificationPopover';
+import { ErrorBoundary, CompactFallback } from './components/ErrorBoundary';
 import { getCachedConfig, clearConfigCache } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
@@ -18,18 +19,21 @@ function ActionButton({
   onClick,
   children,
   isLoading = false,
-  disabled = false
+  disabled = false,
+  'aria-label': ariaLabel,
 }: {
   onClick: () => void;
   children: ReactNode;
   isLoading?: boolean;
   disabled?: boolean;
+  'aria-label'?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled || isLoading}
       className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      aria-label={ariaLabel}
     >
       {isLoading ? (
         <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -192,9 +196,9 @@ export default function App() {
 
     if (error && cards.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4">
+        <div className="flex flex-col items-center justify-center flex-1 gap-4" role="alert">
           <div className="text-red-600">Error: {error}</div>
-          <ActionButton onClick={refresh}>Retry</ActionButton>
+          <ActionButton onClick={refresh} aria-label="Retry loading data">Retry</ActionButton>
         </div>
       );
     }
@@ -225,26 +229,46 @@ export default function App() {
   };
 
   return (
-    <NotificationProvider>
-      <DotBackground>
-        <div className="h-screen flex flex-col overflow-hidden">
-          <Header
-            isMock={isMock}
-            setDataSource={setDataSource}
-            onRefresh={refresh}
-            onSettingsOpen={() => setIsSettingsOpen(true)}
-            repository={repository}
-            isRefreshing={isRefreshing}
+    <ErrorBoundary name="App">
+      <NotificationProvider>
+        <DotBackground>
+          <div className="h-screen flex flex-col overflow-hidden">
+            <Header
+              isMock={isMock}
+              setDataSource={setDataSource}
+              onRefresh={refresh}
+              onSettingsOpen={() => setIsSettingsOpen(true)}
+              repository={repository}
+              isRefreshing={isRefreshing}
+            />
+            <ErrorBoundary
+              name="KanbanBoard"
+              fallback={(error, resetError) => (
+                <div className="flex-1 p-6">
+                  <CompactFallback error={error} onRetry={resetError} title="Board Error" />
+                </div>
+              )}
+            >
+              {renderContent()}
+            </ErrorBoundary>
+          </div>
+          <NotificationContainer />
+        </DotBackground>
+        <ErrorBoundary
+          name="SettingsPanel"
+          fallback={(error, resetError) => (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6">
+              <CompactFallback error={error} onRetry={resetError} title="Settings Error" />
+            </div>
+          )}
+        >
+          <SettingsPanel
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            onConfigChange={handleConfigChange}
           />
-          {renderContent()}
-        </div>
-        <NotificationContainer />
-      </DotBackground>
-      <SettingsPanel
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onConfigChange={handleConfigChange}
-      />
-    </NotificationProvider>
+        </ErrorBoundary>
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 }

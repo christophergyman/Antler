@@ -243,16 +243,35 @@ export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<voi
 // Config Cache
 // ============================================================================
 
-let cachedConfig: AntlerConfig | null = null;
+/** Cache TTL in milliseconds (5 minutes) */
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CacheEntry<T> {
+  value: T;
+  timestamp: number;
+}
+
+let cachedConfig: CacheEntry<AntlerConfig> | null = null;
+
+/**
+ * Check if a cache entry is still valid
+ */
+function isCacheValid<T>(entry: CacheEntry<T> | null): entry is CacheEntry<T> {
+  if (!entry) return false;
+  return Date.now() - entry.timestamp < CONFIG_CACHE_TTL_MS;
+}
 
 export async function getCachedConfig(): Promise<ConfigResult<AntlerConfig>> {
-  if (cachedConfig) {
-    return ok(cachedConfig);
+  if (isCacheValid(cachedConfig)) {
+    return ok(cachedConfig.value);
   }
 
   const result = await loadConfig();
   if (result.ok) {
-    cachedConfig = result.value;
+    cachedConfig = {
+      value: result.value,
+      timestamp: Date.now(),
+    };
   }
   return result;
 }
@@ -265,15 +284,15 @@ export function clearConfigCache(): void {
 // Repository Root
 // ============================================================================
 
-let cachedRepoRoot: string | null = null;
+let cachedRepoRoot: CacheEntry<string> | null = null;
 
 /**
  * Get the repository root directory
  * Uses `git rev-parse --show-toplevel` to find the actual git root
  */
 export async function getCurrentRepoRoot(): Promise<ConfigResult<string>> {
-  if (cachedRepoRoot) {
-    return ok(cachedRepoRoot);
+  if (isCacheValid(cachedRepoRoot)) {
+    return ok(cachedRepoRoot.value);
   }
 
   try {
@@ -291,9 +310,13 @@ export async function getCurrentRepoRoot(): Promise<ConfigResult<string>> {
       );
     }
 
-    cachedRepoRoot = output.stdout.trim();
-    logConfig("debug", "Found repo root", { path: cachedRepoRoot });
-    return ok(cachedRepoRoot);
+    const repoRoot = output.stdout.trim();
+    cachedRepoRoot = {
+      value: repoRoot,
+      timestamp: Date.now(),
+    };
+    logConfig("debug", "Found repo root", { path: repoRoot });
+    return ok(repoRoot);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logConfig("error", "Failed to execute git command", { error: message });

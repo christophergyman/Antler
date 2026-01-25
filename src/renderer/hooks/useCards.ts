@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import type { Card } from '@core/types/card';
 import type { ConfigError, GitHubError } from '@core/types/result';
 import { getCachedConfig } from '@services/config';
@@ -38,6 +38,11 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasFetched = useRef(false);
+
+  // Use a ref to access current cards without creating a dependency
+  // This prevents the infinite loop where fetchCards -> cards change -> fetchCards recreated
+  const cardsRef = useRef<Card[]>(cards);
+  cardsRef.current = cards;
 
   const fetchCards = useCallback(async () => {
     const isInitial = !hasFetched.current;
@@ -85,7 +90,8 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       }
 
       // Sync cards with fetched issues
-      const syncResult = syncCards(cards, issuesResult.value);
+      // Use ref to get current cards without dependency
+      const syncResult = syncCards(cardsRef.current, issuesResult.value);
       setCards(syncResult.cards);
 
       logDataSync('info', 'Sync completed', {
@@ -104,7 +110,7 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [cards, dataSource]);
+  }, [dataSource]); // Removed cards dependency - using ref instead
 
   useEffect(() => {
     fetchCards();

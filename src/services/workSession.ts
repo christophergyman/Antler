@@ -61,6 +61,9 @@ export function getBranchNameForCard(card: Card): string | null {
 /**
  * Start a work session for a card
  * Creates worktree and starts devcontainer
+ *
+ * Uses a cleanup tracking flag to prevent double cleanup when abort races
+ * with async operation completion.
  */
 export async function startWorkSession(
   repoRoot: string,
@@ -71,6 +74,21 @@ export async function startWorkSession(
     cardId: card.sessionUid,
     cardName: card.name,
   });
+
+  // Track cleanup state to prevent double cleanup on abort race
+  let cleanupPerformed = false;
+  let worktreeCreated = false;
+  let branchName: string | null = null;
+
+  // Cleanup helper that ensures cleanup only happens once
+  const performCleanup = async () => {
+    if (cleanupPerformed || !worktreeCreated || !branchName) {
+      return;
+    }
+    cleanupPerformed = true;
+    logWorktree("info", "Cleaning up worktree", { branchName, cardId: card.sessionUid });
+    await removeWorktree(repoRoot, branchName);
+  };
 
   // Check for cancellation early
   if (signal?.aborted) {
@@ -103,7 +121,7 @@ export async function startWorkSession(
   }
 
   // Step 2: Get branch name
-  const branchName = getBranchNameForCard(card);
+  branchName = getBranchNameForCard(card);
 
   if (!branchName) {
     return err(
@@ -154,12 +172,13 @@ export async function startWorkSession(
     );
   }
 
+  // Mark worktree as created for cleanup tracking
+  worktreeCreated = true;
   const worktreePath = worktreeResult.value.path;
 
   // Check for cancellation - cleanup worktree if cancelled
   if (signal?.aborted) {
-    logWorktree("info", "Cleaning up worktree after cancellation", { branchName, cardId: card.sessionUid });
-    await removeWorktree(repoRoot, branchName);
+    await performCleanup();
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
@@ -175,7 +194,7 @@ export async function startWorkSession(
       branchName,
       cardId: card.sessionUid,
     });
-    await removeWorktree(repoRoot, branchName);
+    await performCleanup();
 
     return err(
       createWorkSessionError(
@@ -190,8 +209,7 @@ export async function startWorkSession(
 
   // Check for cancellation - cleanup worktree if cancelled
   if (signal?.aborted) {
-    logWorktree("info", "Cleaning up worktree after port allocation cancellation", { branchName, cardId: card.sessionUid });
-    await removeWorktree(repoRoot, branchName);
+    await performCleanup();
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
@@ -209,7 +227,7 @@ export async function startWorkSession(
       port,
       cardId: card.sessionUid,
     });
-    await removeWorktree(repoRoot, branchName);
+    await performCleanup();
 
     return err(
       createWorkSessionError(

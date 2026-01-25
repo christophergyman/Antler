@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card } from '@core/types/card';
@@ -7,7 +8,7 @@ interface SortableCardProps {
   card: Card;
 }
 
-export function SortableCard({ card }: SortableCardProps) {
+export const SortableCard = memo(function SortableCard({ card }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -17,11 +18,14 @@ export function SortableCard({ card }: SortableCardProps) {
     isDragging,
   } = useSortable({ id: card.sessionUid });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const style = useMemo(
+    () => ({
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    }),
+    [transform, transition, isDragging]
+  );
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -39,4 +43,4 @@ export function SortableCard({ card }: SortableCardProps) {
       />
     </div>
   );
-}
+});

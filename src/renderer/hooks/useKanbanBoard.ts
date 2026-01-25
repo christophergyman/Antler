@@ -51,8 +51,8 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       const abortController = new AbortController();
       abortControllersRef.current.set(card.sessionUid, abortController);
 
-      // Update card to show creating state
-      updateCard(card.sessionUid, (c) => startWorktreeCreation(c));
+      // Update card to show creating state and set status to in_progress
+      updateCard(card.sessionUid, (c) => setStatus(startWorktreeCreation(c), 'in_progress'));
 
       try {
         // Get repo root
@@ -148,7 +148,7 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
           logUserAction('worktree_cancel', 'Cancelled pending worktree creation', {
             cardId: card.sessionUid,
           });
-          updateCard(card.sessionUid, (c) => completeWorktreeRemoval(c));
+          updateCard(card.sessionUid, (c) => setStatus(completeWorktreeRemoval(c), 'idle'));
           return;
         }
       }
@@ -183,12 +183,12 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
         const result = await stopWorkSession(repoRoot, card);
 
         if (result.ok) {
-          // Success - clear worktree info
+          // Success - clear worktree info and set status to idle
           logWorktree('info', 'Work session stopped successfully', {
             cardId: card.sessionUid,
             cardName: card.name,
           });
-          updateCard(card.sessionUid, (c) => completeWorktreeRemoval(c));
+          updateCard(card.sessionUid, (c) => setStatus(completeWorktreeRemoval(c), 'idle'));
         } else {
           // Failure - set error
           logWorktree('error', 'Work session stop failed', {
@@ -229,27 +229,28 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       const isIdleToInProgress = oldStatus === 'idle' && newStatus === 'in_progress';
       const isInProgressToIdle = oldStatus === 'in_progress' && newStatus === 'idle';
 
-      // Update status immediately (optimistic update)
-      onCardsChange((prevCards) =>
-        prevCards.map((c) => {
-          if (c.sessionUid !== cardId) return c;
-
-          // Clear error when dragging out of Waiting
-          if (c.hasError && newStatus !== 'waiting') {
-            return setStatus(clearError(c), newStatus);
-          }
-
-          return setStatus(c, newStatus);
-        })
-      );
-
-      // Trigger async work session operations
+      // For work session operations, don't update status immediately
+      // The async handlers will update the status after completion
       if (isIdleToInProgress) {
-        // Start work session (async)
+        // Start work session (async) - status change handled in callback
         handleStartWorkSession(card);
       } else if (isInProgressToIdle) {
-        // Stop work session (async)
+        // Stop work session (async) - status change handled in callback
         handleStopWorkSession(card);
+      } else {
+        // For other status changes (e.g., moving between waiting/done), update immediately
+        onCardsChange((prevCards) =>
+          prevCards.map((c) => {
+            if (c.sessionUid !== cardId) return c;
+
+            // Clear error when dragging out of Waiting
+            if (c.hasError && newStatus !== 'waiting') {
+              return setStatus(clearError(c), newStatus);
+            }
+
+            return setStatus(c, newStatus);
+          })
+        );
       }
     },
     [cards, onCardsChange, handleStartWorkSession, handleStopWorkSession]

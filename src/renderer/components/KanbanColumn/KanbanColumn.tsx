@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Card } from '@core/types/card';
@@ -12,12 +13,20 @@ interface KanbanColumnProps {
   isOver: boolean;
 }
 
-export function KanbanColumn({ id, label, color, bgColor, cards, isOver }: KanbanColumnProps) {
+export const KanbanColumn = memo(function KanbanColumn({
+  id,
+  label,
+  color,
+  bgColor,
+  cards,
+  isOver,
+}: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id,
   });
 
-  const cardIds = cards.map((card) => card.sessionUid);
+  // Memoize card IDs to prevent unnecessary re-renders of SortableContext
+  const cardIds = useMemo(() => cards.map((card) => card.sessionUid), [cards]);
 
   return (
     <div className="flex flex-col w-full md:w-72 md:min-w-72 h-auto md:h-full rounded-lg bg-gray-100/50">
@@ -59,4 +68,4 @@ export function KanbanColumn({ id, label, color, bgColor, cards, isOver }: Kanba
       </div>
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { ERROR_BADGE_COLOR } from '../../constants/status';
@@ -35,7 +36,7 @@ function Spinner() {
   );
 }
 
-export function KanbanCard({
+export const KanbanCard = memo(function KanbanCard({
   title,
   description,
   labels,
@@ -139,4 +140,4 @@ export function KanbanCard({
       </CardContent>
     </Card>
   );
-}
+});

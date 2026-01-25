@@ -3,7 +3,7 @@
  * Manages the queue of error notifications displayed to users
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import type { Notification, LogCategory } from "@core/types";
 import { createNotification } from "@core/types/notification";
 import { setNotificationListener } from "@services/logging";
@@ -75,8 +75,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [addNotification]);
 
+  // Memoize the context value to prevent unnecessary re-renders of consumers
+  const contextValue = useMemo(
+    () => ({
+      notifications,
+      notificationHistory,
+      addNotification,
+      dismissNotification,
+      clearHistory,
+    }),
+    [notifications, notificationHistory, addNotification, dismissNotification, clearHistory]
+  );
+
   return (
-    <NotificationContext.Provider value={{ notifications, notificationHistory, addNotification, dismissNotification, clearHistory }}>
+    <NotificationContext.Provider value={contextValue}>
       {children}
     </NotificationContext.Provider>
   );
