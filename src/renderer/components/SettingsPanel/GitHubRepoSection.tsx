@@ -3,7 +3,7 @@
  * Editable input for GitHub repository (owner/repo)
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SettingsRow } from "./SettingsRow";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -22,6 +22,18 @@ export function GitHubRepoSection({ currentRepo, onSave }: GitHubRepoSectionProp
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Refs for timeout cleanup to prevent memory leaks
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    };
+  }, []);
 
   // Update local value when prop changes
   useEffect(() => {
@@ -55,16 +67,23 @@ export function GitHubRepoSection({ currentRepo, onSave }: GitHubRepoSectionProp
       setSuccess(true);
       onSave();
       // Clear success message after 2 seconds
-      setTimeout(() => setSuccess(false), 2000);
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(() => setSuccess(false), 2000);
     } else {
       setError(result.error.message);
+      // Auto-clear error after 5 seconds
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
     }
   };
 
   let status: StatusIndicator | undefined;
   let statusText: string | undefined;
 
-  if (currentRepo) {
+  if (error) {
+    status = "error";
+    statusText = "Save failed";
+  } else if (currentRepo) {
     status = "success";
     statusText = currentRepo;
   } else {

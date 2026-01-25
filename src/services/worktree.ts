@@ -3,10 +3,10 @@
  * Creates and manages git worktrees for parallel work sessions
  */
 
-import { Command } from "@tauri-apps/plugin-shell";
 import type { WorktreeResult } from "@core/types/result";
 import { ok, err, createWorktreeError } from "@core/types/result";
 import { logWorktree } from "./logging";
+import { executeGit, type CommandResult } from "./commandExecutor";
 
 // ============================================================================
 // Constants
@@ -26,6 +26,8 @@ const DEFAULT_TIMEOUT_MS = 30000;
  * Generate a branch name from issue number and title
  * Format: {issueNumber}-{title-slug}
  * Example: 42-fix-login-bug
+ *
+ * Falls back to "issue" if title produces empty slug
  */
 export function generateBranchName(issueNumber: number, title: string): string {
   const slug = title
@@ -34,7 +36,10 @@ export function generateBranchName(issueNumber: number, title: string): string {
     .replace(/^-+|-+$/g, "")     // Trim leading/trailing hyphens
     .slice(0, 50);               // Limit length
 
-  return `${issueNumber}-${slug}`;
+  // Use "issue" as fallback if slug is empty (e.g., title was all special chars)
+  const finalSlug = slug || "issue";
+
+  return `${issueNumber}-${finalSlug}`;
 }
 
 /**
@@ -48,6 +53,87 @@ export function getWorktreePath(repoRoot: string, branchName: string): string {
 // Git Command Execution
 // ============================================================================
 
+/**
+ * Map CommandResult to WorktreeResult, handling git-specific error codes
+ */
+function mapCommandResultToWorktreeResult(
+  result: CommandResult,
+  commandPreview: string
+): WorktreeResult<string> {
+  // Success
+  if (result.exitCode === 0) {
+    logWorktree("debug", "Git command succeeded", { command: commandPreview });
+    return ok(result.stdout);
+  }
+
+  const stderr = result.stderr;
+
+  // Handle timeout
+  if (result.timedOut) {
+    logWorktree("error", "Git command timed out", { command: commandPreview });
+    return err(
+      createWorktreeError(
+        "worktree_create_failed",
+        "Git command timed out",
+        `${commandPreview} exceeded timeout`
+      )
+    );
+  }
+
+  // Handle branch already checked out
+  if (stderr.includes("already checked out") || stderr.includes("is already used")) {
+    logWorktree("error", "Branch already checked out", { command: commandPreview });
+    return err(
+      createWorktreeError(
+        "branch_checked_out",
+        "Branch is already checked out in another worktree",
+        stderr.trim()
+      )
+    );
+  }
+
+  // Handle worktree already exists
+  if (stderr.includes("already exists")) {
+    logWorktree("error", "Worktree already exists", { command: commandPreview });
+    return err(
+      createWorktreeError(
+        "worktree_exists",
+        "Worktree already exists at this location",
+        stderr.trim()
+      )
+    );
+  }
+
+  // Handle git not installed
+  if (stderr.includes("ENOENT") || stderr.includes("not found")) {
+    logWorktree("error", "Git not installed");
+    return err(
+      createWorktreeError(
+        "git_not_installed",
+        "Git is not installed",
+        "Install git from https://git-scm.com"
+      )
+    );
+  }
+
+  // Generic command failure
+  logWorktree("error", `Git command failed with exit code ${result.exitCode}`, {
+    command: commandPreview,
+    exitCode: result.exitCode,
+    stderr: stderr.trim(),
+  });
+  return err(
+    createWorktreeError(
+      "worktree_create_failed",
+      `Git command failed with exit code ${result.exitCode}`,
+      stderr.trim()
+    )
+  );
+}
+
+/**
+ * Execute a git command using the unified CommandExecutor
+ */
 async function execGit(
   args: string[],
   timeoutMs = DEFAULT_TIMEOUT_MS
@@ -55,92 +141,18 @@ async function execGit(
   const commandPreview = `git ${args.slice(0, 4).join(" ")}${args.length > 4 ? "..." : ""}`;
   logWorktree("debug", `Executing: ${commandPreview}`);
 
-  try {
-    const command = Command.create("run-git", args);
+  const result = await executeGit(args, { timeoutMs });
 
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let child: Awaited<ReturnType<typeof command.spawn>> | null = null;
+  if (result.ok) {
+    return mapCommandResultToWorktreeResult(result.value, commandPreview);
+  }
 
-    command.stdout.on("data", (data) => {
-      stdout += data;
-    });
-    command.stderr.on("data", (data) => {
-      stderr += data;
-    });
-
-    const exitPromise = new Promise<number | null>((resolve) => {
-      command.on("close", (data) => resolve(data.code));
-      command.on("error", () => resolve(null));
-    });
-
-    child = await command.spawn();
-
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      child?.kill();
-    }, timeoutMs);
-
-    const status = await exitPromise;
-    clearTimeout(timeoutId);
-
-    if (timedOut) {
-      logWorktree("error", "Git command timed out", { command: commandPreview, timeoutMs });
-      return err(
-        createWorktreeError(
-          "worktree_create_failed",
-          "Git command timed out",
-          `${commandPreview} exceeded ${timeoutMs}ms`
-        )
-      );
-    }
-
-    if (status === 0) {
-      logWorktree("debug", "Git command succeeded", { command: commandPreview });
-      return ok(stdout);
-    }
-
-    // Handle specific errors
-    if (stderr.includes("already checked out") || stderr.includes("is already used")) {
-      logWorktree("error", "Branch already checked out", { command: commandPreview });
-      return err(
-        createWorktreeError(
-          "branch_checked_out",
-          "Branch is already checked out in another worktree",
-          stderr.trim()
-        )
-      );
-    }
-
-    if (stderr.includes("already exists")) {
-      logWorktree("error", "Worktree already exists", { command: commandPreview });
-      return err(
-        createWorktreeError(
-          "worktree_exists",
-          "Worktree already exists at this location",
-          stderr.trim()
-        )
-      );
-    }
-
-    logWorktree("error", `Git command failed with exit code ${status}`, {
-      command: commandPreview,
-      exitCode: status,
-      stderr: stderr.trim()
-    });
-    return err(
-      createWorktreeError(
-        "worktree_create_failed",
-        `Git command failed with exit code ${status}`,
-        stderr.trim()
-      )
-    );
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
-      logWorktree("error", "Git not installed");
+  // Map CommandError to WorktreeError
+  const error = result.error;
+  switch (error.type) {
+    case "cancelled":
+      return err(createWorktreeError("worktree_create_failed", "Operation cancelled"));
+    case "not_installed":
       return err(
         createWorktreeError(
           "git_not_installed",
@@ -148,12 +160,8 @@ async function execGit(
           "Install git from https://git-scm.com"
         )
       );
-    }
-
-    logWorktree("error", "Failed to execute git command", { error: errorMessage });
-    return err(
-      createWorktreeError("worktree_create_failed", "Failed to execute git command", errorMessage)
-    );
+    default:
+      return err(createWorktreeError("worktree_create_failed", error.message, error.details));
   }
 }
 
