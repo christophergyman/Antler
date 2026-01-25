@@ -80,9 +80,8 @@ function Header({
   isRefreshing: boolean;
 }) {
   return (
-    <div className="px-6 pt-6 pb-2 shrink-0">
-      {/* Match board width: 4 columns × 18rem + 3 gaps × 1rem = 75rem, but allow shrinking */}
-      <div className="flex items-center justify-between w-full max-w-[calc(4*18rem+3*1rem)]">
+    <div className="px-6 pt-6 pb-2 shrink-0 flex justify-center">
+      <div className="flex items-center justify-between w-full md:max-w-[calc(4*18rem+3*1rem)]">
         <div className="flex items-center gap-4">
           <Toggle
             pressed={isMock}

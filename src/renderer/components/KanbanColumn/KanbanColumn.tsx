@@ -20,7 +20,7 @@ export function KanbanColumn({ id, label, color, bgColor, cards, isOver }: Kanba
   const cardIds = cards.map((card) => card.sessionUid);
 
   return (
-    <div className="flex flex-col w-72 min-w-72 h-full rounded-lg bg-gray-100/50">
+    <div className="flex flex-col w-full md:w-72 md:min-w-72 h-auto md:h-full rounded-lg bg-gray-100/50">
       {/* Column Header */}
       <div
         className="flex items-center gap-2 p-3 rounded-t-lg"
