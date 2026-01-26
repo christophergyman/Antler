@@ -243,6 +243,163 @@ export function clearConfigCache(): void {
 }
 
 // ============================================================================
+// Config File Operations (for YAML Editor)
+// ============================================================================
+
+/**
+ * Check if antler.yaml config file exists
+ */
+export async function configFileExists(): Promise<boolean> {
+  return await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+}
+
+/**
+ * Get raw YAML content as string (for editor display)
+ */
+export async function getConfigContent(): Promise<ConfigResult<string>> {
+  try {
+    const configExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+
+    if (!configExists) {
+      const configPath = await getConfigLocation();
+      return err(
+        createConfigError(
+          "config_not_found",
+          "Config file not found",
+          `Expected at: ${configPath}`
+        )
+      );
+    }
+
+    const content = await readTextFile(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+    return ok(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to read config content", { error: message });
+    return err(
+      createConfigError(
+        "config_not_found",
+        "Failed to read config file",
+        message
+      )
+    );
+  }
+}
+
+/**
+ * Save raw YAML content to config file
+ * Parses and validates YAML before saving
+ */
+export async function saveConfigContent(yamlString: string): Promise<ConfigResult<void>> {
+  logConfig("debug", "Saving config content");
+
+  // Parse YAML first to validate syntax
+  let parsed: unknown;
+  try {
+    parsed = load(yamlString);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Invalid YAML syntax", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Invalid YAML syntax",
+        message
+      )
+    );
+  }
+
+  // Validate config structure (but allow empty repository for initial setup)
+  if (!parsed || typeof parsed !== "object") {
+    return err(
+      createConfigError("config_invalid", "Config must be an object")
+    );
+  }
+
+  const config = parsed as RawConfig;
+
+  if (!config.github || typeof config.github !== "object") {
+    return err(
+      createConfigError("config_invalid", "Missing 'github' section in config")
+    );
+  }
+
+  // Repository can be empty string but must be a string if present
+  if (config.github.repository !== undefined && typeof config.github.repository !== "string") {
+    return err(
+      createConfigError(
+        "config_invalid",
+        "Repository must be a string"
+      )
+    );
+  }
+
+  try {
+    // Ensure AppData directory exists
+    await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
+
+    // Write the raw YAML content (preserving user formatting)
+    await writeTextFile(CONFIG_FILENAME, yamlString, { baseDir: BaseDirectory.AppData });
+
+    // Clear cache so next load reads fresh data
+    cachedConfig = null;
+
+    const configPath = await getConfigLocation();
+    logConfig("info", "Config content saved successfully", { path: configPath });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to save config content", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Failed to save config file",
+        message
+      )
+    );
+  }
+}
+
+/**
+ * Ensure config file exists, creating minimal template if not
+ */
+export async function ensureConfigExists(): Promise<ConfigResult<void>> {
+  const configExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+
+  if (configExists) {
+    logConfig("debug", "Config file already exists");
+    return ok(undefined);
+  }
+
+  logConfig("info", "Creating initial config file");
+
+  try {
+    // Ensure AppData directory exists
+    await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
+
+    const template = `github:
+  repository: ""
+`;
+
+    await writeTextFile(CONFIG_FILENAME, template, { baseDir: BaseDirectory.AppData });
+
+    const configPath = await getConfigLocation();
+    logConfig("info", "Initial config file created", { path: configPath });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to create initial config", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Failed to create config file",
+        message
+      )
+    );
+  }
+}
+
+// ============================================================================
 // Repository Root
 // ============================================================================
 

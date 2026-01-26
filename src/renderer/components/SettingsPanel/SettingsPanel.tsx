@@ -9,7 +9,7 @@ import type { SettingsPanelProps } from "./types";
 import { SettingsGroup } from "./SettingsGroup";
 import { GitRepoSection } from "./GitRepoSection";
 import { DevcontainerEditorSection } from "./DevcontainerEditorSection";
-import { GitHubRepoSection } from "./GitHubRepoSection";
+import { AntlerConfigSection } from "./AntlerConfigSection";
 import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
 import { ProjectSection } from "./ProjectSection";
@@ -92,11 +92,16 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
 
           {/* GitHub Group */}
           <SettingsGroup title="GitHub">
-            <GitHubRepoSection
-              currentRepo={settings.repository}
-              onSave={handleConfigChange}
+            <AntlerConfigSection
+              hasConfig={settings.hasAntlerConfig}
+              configContent={settings.antlerConfigContent}
+              configPath={settings.antlerConfigPath}
+              onSave={async (content) => {
+                await settings.saveAntlerConfig(content);
+                handleConfigChange();
+              }}
             />
-            <div className="px-4 py-3">
+            <div className="px-4 py-3 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-gray-900">Config Location</h3>
@@ -106,9 +111,6 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
                   Reveal in Finder
                 </Button>
               </div>
-              <p className="text-xs text-gray-400 font-mono mt-2 truncate" title={settings.configLocation ?? undefined}>
-                {settings.configLocation ? settings.configLocation.replace(/^\/Users\/[^/]+/, "~") : "Loading..."}
-              </p>
             </div>
             <GitHubAuthSection
               isAuthenticated={settings.isGitHubAuthenticated}
