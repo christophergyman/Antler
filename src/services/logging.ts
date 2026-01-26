@@ -314,6 +314,13 @@ export function logPrerequisites(level: LogLevel, message: string, context?: Rec
   log(level, "prerequisites", message, context);
 }
 
+/**
+ * Log project operations
+ */
+export function logProject(level: LogLevel, message: string, context?: Record<string, unknown>): void {
+  log(level, "project", message, context);
+}
+
 // ============================================================================
 // Convenience Logging Functions
 // ============================================================================

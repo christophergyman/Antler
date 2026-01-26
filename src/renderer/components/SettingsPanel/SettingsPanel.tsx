@@ -9,9 +9,10 @@ import type { SettingsPanelProps } from "./types";
 import { SettingsGroup } from "./SettingsGroup";
 import { GitRepoSection } from "./GitRepoSection";
 import { DevcontainerEditorSection } from "./DevcontainerEditorSection";
-import { GitHubRepoSection } from "./GitHubRepoSection";
+import { AntlerConfigSection } from "./AntlerConfigSection";
 import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
+import { ProjectSection } from "./ProjectSection";
 import { useSettings } from "../../hooks/useSettings";
 
 export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanelProps) {
@@ -84,12 +85,33 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
 
         {/* Content */}
         <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* Project Group */}
+          <SettingsGroup title="Project">
+            <ProjectSection onProjectChange={handleConfigChange} />
+          </SettingsGroup>
+
           {/* GitHub Group */}
           <SettingsGroup title="GitHub">
-            <GitHubRepoSection
-              currentRepo={settings.repository}
-              onSave={handleConfigChange}
+            <AntlerConfigSection
+              hasConfig={settings.hasAntlerConfig}
+              configContent={settings.antlerConfigContent}
+              configPath={settings.antlerConfigPath}
+              onSave={async (content) => {
+                await settings.saveAntlerConfig(content);
+                handleConfigChange();
+              }}
             />
+            <div className="px-4 py-3 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Config Location</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Settings stored in app data directory</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={settings.revealConfig}>
+                  Reveal in Finder
+                </Button>
+              </div>
+            </div>
             <GitHubAuthSection
               isAuthenticated={settings.isGitHubAuthenticated}
               username={settings.gitHubUsername}
