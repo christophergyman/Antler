@@ -474,3 +474,194 @@ export async function fetchIssuesWithPRs(
 
   return ok(results);
 }
+
+// ============================================================================
+// Issue Update Operations
+// ============================================================================
+
+export interface UpdateIssueParams {
+  title?: string;
+  body?: string;
+  addLabels?: string[];
+  removeLabels?: string[];
+  addAssignees?: string[];
+  removeAssignees?: string[];
+  milestone?: string | null;
+}
+
+/**
+ * Update an issue's fields
+ * Uses gh issue edit command
+ */
+export async function updateIssue(
+  repo: string,
+  issueNumber: number,
+  params: UpdateIssueParams
+): Promise<GitHubResult<void>> {
+  const args = ["issue", "edit", String(issueNumber), "--repo", repo];
+
+  if (params.title !== undefined) {
+    args.push("--title", params.title);
+  }
+  if (params.body !== undefined) {
+    args.push("--body", params.body);
+  }
+  if (params.addLabels && params.addLabels.length > 0) {
+    args.push("--add-label", params.addLabels.join(","));
+  }
+  if (params.removeLabels && params.removeLabels.length > 0) {
+    args.push("--remove-label", params.removeLabels.join(","));
+  }
+  if (params.addAssignees && params.addAssignees.length > 0) {
+    args.push("--add-assignee", params.addAssignees.join(","));
+  }
+  if (params.removeAssignees && params.removeAssignees.length > 0) {
+    args.push("--remove-assignee", params.removeAssignees.join(","));
+  }
+  if (params.milestone !== undefined) {
+    if (params.milestone === null) {
+      args.push("--milestone", "");
+    } else {
+      args.push("--milestone", params.milestone);
+    }
+  }
+
+  logDataSync("info", "Updating issue", { issueNumber, changes: Object.keys(params) });
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  return ok(undefined);
+}
+
+/**
+ * Add a comment to an issue
+ */
+export async function addIssueComment(
+  repo: string,
+  issueNumber: number,
+  body: string
+): Promise<GitHubResult<void>> {
+  const args = [
+    "issue",
+    "comment",
+    String(issueNumber),
+    "--repo",
+    repo,
+    "--body",
+    body,
+  ];
+
+  logDataSync("info", "Adding comment to issue", { issueNumber });
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  return ok(undefined);
+}
+
+// ============================================================================
+// Repository Metadata Fetching
+// ============================================================================
+
+/**
+ * Fetch available labels for a repository
+ */
+export async function fetchRepoLabels(repo: string): Promise<GitHubResult<string[]>> {
+  const args = [
+    "label",
+    "list",
+    "--repo",
+    repo,
+    "--json",
+    "name",
+    "--limit",
+    "100",
+  ];
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  try {
+    const labels: { name: string }[] = JSON.parse(result.value);
+    return ok(labels.map((l) => l.name));
+  } catch (error) {
+    return err(
+      createGitHubError(
+        "parse_error",
+        "Failed to parse labels JSON",
+        error instanceof Error ? error.message : String(error)
+      )
+    );
+  }
+}
+
+/**
+ * Fetch repository collaborators (users who can be assigned to issues)
+ */
+export async function fetchRepoCollaborators(repo: string): Promise<GitHubResult<string[]>> {
+  const args = [
+    "api",
+    `repos/${repo}/collaborators`,
+    "--jq",
+    ".[].login",
+  ];
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  // The output is newline-separated usernames
+  const collaborators = result.value
+    .trim()
+    .split("\n")
+    .filter((c) => c.length > 0);
+
+  return ok(collaborators);
+}
+
+/**
+ * Fetch open milestones for a repository
+ */
+export async function fetchRepoMilestones(repo: string): Promise<GitHubResult<string[]>> {
+  const args = [
+    "api",
+    `repos/${repo}/milestones`,
+    "--jq",
+    ".[].title",
+  ];
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  // The output is newline-separated milestone titles
+  const milestones = result.value
+    .trim()
+    .split("\n")
+    .filter((m) => m.length > 0);
+
+  return ok(milestones);
+}
+
+/**
+ * Create a new milestone
+ */
+export async function createMilestone(
+  repo: string,
+  title: string
+): Promise<GitHubResult<void>> {
+  const args = [
+    "api",
+    `repos/${repo}/milestones`,
+    "--method",
+    "POST",
+    "-f",
+    `title=${title}`,
+  ];
+
+  logDataSync("info", "Creating milestone", { repo, title });
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  return ok(undefined);
+}

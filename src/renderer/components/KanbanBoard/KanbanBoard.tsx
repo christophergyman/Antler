@@ -21,9 +21,10 @@ import { KANBAN_COLUMNS } from '../../constants/status';
 interface KanbanBoardProps {
   cards: Card[];
   onCardStatusChange: (cardId: string, newStatus: CardStatus) => void;
+  onCardClick?: (card: Card) => void;
 }
 
-export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ cards, onCardStatusChange, onCardClick }: KanbanBoardProps) {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
@@ -135,6 +136,7 @@ export function KanbanBoard({ cards, onCardStatusChange }: KanbanBoardProps) {
             bgColor={column.bgColor}
             cards={cardsByStatus[column.id]}
             isOver={activeColumnId === column.id}
+            onCardClick={onCardClick}
           />
         ))}
       </div>

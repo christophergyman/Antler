@@ -11,6 +11,7 @@ interface KanbanColumnProps {
   bgColor: string;
   cards: Card[];
   isOver: boolean;
+  onCardClick?: (card: Card) => void;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
@@ -20,6 +21,7 @@ export const KanbanColumn = memo(function KanbanColumn({
   bgColor,
   cards,
   isOver,
+  onCardClick,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id,
@@ -57,7 +59,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       >
         <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
-            <SortableCard key={card.sessionUid} card={card} />
+            <SortableCard key={card.sessionUid} card={card} onClick={onCardClick} />
           ))}
         </SortableContext>
         {cards.length === 0 && (

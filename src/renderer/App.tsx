@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import type { Card } from '@core/types/card';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
+import { DetailedCardView } from './components/DetailedCardView';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
@@ -12,7 +14,7 @@ import { NotificationContainer } from './components/ui/NotificationContainer';
 import { NotificationPopover } from './components/ui/NotificationPopover';
 import { ErrorBoundary, CompactFallback } from './components/ErrorBoundary';
 import { getCachedConfig, clearConfigCache } from '@services/config';
-import { initLogger, shutdownLogger, logSystem } from '@services/logging';
+import { initLogger, shutdownLogger, logSystem, logUserAction } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
 
 function ActionButton({
@@ -149,6 +151,26 @@ export default function App() {
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
   const [repository, setRepository] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+
+  const handleCardClick = useCallback((card: Card) => {
+    setSelectedCard(card);
+    logUserAction('card_opened', 'Opened card details', { cardId: card.sessionUid });
+  }, []);
+
+  const handleCloseDetailedView = useCallback(() => {
+    setSelectedCard(null);
+  }, []);
+
+  const handleCardUpdate = useCallback((updatedCard: Card) => {
+    setCards((prevCards) =>
+      prevCards.map((card) =>
+        card.sessionUid === updatedCard.sessionUid ? updatedCard : card
+      )
+    );
+    // Also update the selected card if it's the one being edited
+    setSelectedCard(updatedCard);
+  }, [setCards]);
 
   useEffect(() => {
     if (!isMock) {
@@ -211,7 +233,11 @@ export default function App() {
             <ActionButton onClick={refresh}>Retry</ActionButton>
           </div>
         )}
-        <KanbanBoard cards={cards} onCardStatusChange={handleCardStatusChange} />
+        <KanbanBoard
+          cards={cards}
+          onCardStatusChange={handleCardStatusChange}
+          onCardClick={handleCardClick}
+        />
       </>
     );
   };
@@ -266,6 +292,21 @@ export default function App() {
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             onConfigChange={handleConfigChange}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary
+          name="DetailedCardView"
+          fallback={(error, resetError) => (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6">
+              <CompactFallback error={error} onRetry={resetError} title="Card Details Error" />
+            </div>
+          )}
+        >
+          <DetailedCardView
+            card={selectedCard}
+            isOpen={selectedCard !== null}
+            onClose={handleCloseDetailedView}
+            onCardUpdate={handleCardUpdate}
           />
         </ErrorBoundary>
       </NotificationProvider>
