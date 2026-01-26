@@ -11,6 +11,16 @@ import { getTerminalApp, getPostOpenCommand } from "@services/config";
 import { logUserAction, logPerformance } from "@services/logging";
 import type { WorktreeSectionProps } from "./types";
 
+/**
+ * Escapes special characters for AppleScript string literals
+ */
+function escapeAppleScript(str: string): string {
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n");
+}
+
 export const WorktreeSection = memo(function WorktreeSection({
   worktreeCreated,
   worktreePath,
@@ -50,34 +60,38 @@ export const WorktreeSection = memo(function WorktreeSection({
         return;
       }
 
-      // If there's a post-open command, use AppleScript to send it to the terminal
+      // If there's a post-open command, use native terminal APIs to execute it
       if (postOpenCommand) {
-        // Wait a bit for the terminal to open and focus
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Use AppleScript to type the command into the terminal
         const appName = terminalApp || "Terminal";
-        const script = `
-          tell application "${appName}"
-            activate
-            delay 0.3
-            tell application "System Events"
-              keystroke "${postOpenCommand}"
-              key code 36
-            end tell
-          end tell
-        `;
+        const isITerm = appName.toLowerCase().includes("iterm");
+        const escapedCommand = escapeAppleScript(postOpenCommand);
+
+        // Use native terminal APIs instead of unreliable keystroke simulation
+        const script = isITerm
+          ? `tell application "iTerm"
+               activate
+               set currentSession to current session of current window
+               tell currentSession
+                 write text "${escapedCommand}"
+               end tell
+             end tell`
+          : `tell application "Terminal"
+               activate
+               do script "${escapedCommand}" in front window
+             end tell`;
 
         const osascriptResult = await executeOsascript(["-e", script]);
         if (osascriptResult.ok) {
-          logUserAction("open_terminal", "AppleScript executed successfully", {
+          logUserAction("open_terminal", "Command executed via native terminal API", {
             command: postOpenCommand,
             app: appName,
+            isITerm,
           });
         } else {
-          logUserAction("open_terminal", "AppleScript execution failed", {
+          logUserAction("open_terminal", "Terminal command execution failed", {
             command: postOpenCommand,
             app: appName,
+            isITerm,
             error: osascriptResult.error.message,
           });
         }
