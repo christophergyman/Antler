@@ -23,6 +23,7 @@ import {
 } from "@services/devcontainer";
 import { getDockerRuntimeStatus, onDockerRuntimeStatusChange } from "@services/dockerRuntime";
 import type { DockerRuntimeStatus } from "@services/dockerRuntime";
+import { logConfig, logDocker, logPrerequisites, logDataSync } from "@services/logging";
 
 interface SettingsState {
   // Config
@@ -68,18 +69,22 @@ export function useSettings() {
   });
 
   const checkConfig = useCallback(async () => {
+    logConfig("debug", "Checking config");
     const [result, location] = await Promise.all([
       getCachedConfig(),
       getConfigLocation(),
     ]);
     if (result.ok) {
       setState((prev) => ({ ...prev, repository: result.value.github.repository, configLocation: location }));
+      logConfig("debug", "Config loaded", { repository: result.value.github.repository });
     } else {
       setState((prev) => ({ ...prev, repository: null, configLocation: location }));
+      logConfig("debug", "Config not found or invalid", { location });
     }
   }, []);
 
   const loadAntlerConfig = useCallback(async () => {
+    logConfig("debug", "Loading antler.yaml config");
     const [hasConfig, contentResult, configPath] = await Promise.all([
       configFileExists(),
       getConfigContent(),
@@ -92,11 +97,14 @@ export function useSettings() {
       antlerConfigContent: contentResult.ok ? contentResult.value : null,
       antlerConfigPath: configPath,
     }));
+    logConfig("debug", "Antler config loaded", { hasConfig, configPath });
   }, []);
 
   const saveAntlerConfig = useCallback(async (content: string): Promise<void> => {
+    logConfig("info", "Saving antler.yaml config");
     const result = await saveConfigContent(content);
     if (!result.ok) {
+      logConfig("error", "Failed to save antler.yaml config", { error: result.error.message });
       throw new Error(result.error.message);
     }
 
@@ -105,18 +113,22 @@ export function useSettings() {
     // Also refresh the parsed config
     clearConfigCache();
     await checkConfig();
+    logConfig("info", "Antler config saved successfully");
   }, [loadAntlerConfig, checkConfig]);
 
   const checkGitRepo = useCallback(async () => {
+    logConfig("debug", "Checking git repository");
     const result = await getCurrentRepoRoot();
     setState((prev) => ({
       ...prev,
       isGitRepo: result.ok,
       repoRoot: result.ok ? result.value : null,
     }));
+    logConfig("debug", "Git repository check complete", { isGitRepo: result.ok, repoRoot: result.ok ? result.value : null });
   }, []);
 
   const checkAuth = useCallback(async () => {
+    logDataSync("debug", "Checking GitHub authentication");
     setState((prev) => ({ ...prev, isCheckingAuth: true }));
     const result = await checkGitHubAuth();
 
@@ -127,6 +139,7 @@ export function useSettings() {
         gitHubUsername: result.value?.username ?? null,
         isCheckingAuth: false,
       }));
+      logDataSync("info", "GitHub authenticated", { username: result.value?.username });
     } else {
       setState((prev) => ({
         ...prev,
@@ -134,18 +147,23 @@ export function useSettings() {
         gitHubUsername: null,
         isCheckingAuth: false,
       }));
+      logDataSync("debug", "GitHub not authenticated");
     }
   }, []);
 
   const checkDocker = useCallback(() => {
+    logDocker("debug", "Checking Docker status");
+    const status = getDockerRuntimeStatus();
     setState((prev) => ({
       ...prev,
-      dockerStatus: getDockerRuntimeStatus(),
+      dockerStatus: status,
       isCheckingDocker: false,
     }));
+    logDocker("debug", "Docker status check complete", { status });
   }, []);
 
   const checkDevcontainer = useCallback(async () => {
+    logPrerequisites("debug", "Checking devcontainer config");
     const repoResult = await getCurrentRepoRoot();
     if (repoResult.ok) {
       const repoRoot = repoResult.value;
@@ -160,6 +178,7 @@ export function useSettings() {
           devcontainerConfig: configResult.ok ? configResult.value : null,
           devcontainerConfigPath: configPath,
         }));
+        logPrerequisites("debug", "Devcontainer config found", { configPath });
       } else {
         setState((prev) => ({
           ...prev,
@@ -167,6 +186,7 @@ export function useSettings() {
           devcontainerConfig: null,
           devcontainerConfigPath: configPath,
         }));
+        logPrerequisites("debug", "No devcontainer config found", { expectedPath: configPath });
       }
     } else {
       setState((prev) => ({
@@ -175,10 +195,12 @@ export function useSettings() {
         devcontainerConfig: null,
         devcontainerConfigPath: null,
       }));
+      logPrerequisites("debug", "No repo root, skipping devcontainer check");
     }
   }, []);
 
   const refresh = useCallback(() => {
+    logConfig("debug", "Refreshing all settings");
     clearConfigCache();
     checkConfig();
     loadAntlerConfig();
@@ -189,18 +211,22 @@ export function useSettings() {
   }, [checkConfig, loadAntlerConfig, checkGitRepo, checkAuth, checkDocker, checkDevcontainer]);
 
   const saveDevcontainerConfig = useCallback(async (content: string): Promise<void> => {
+    logPrerequisites("info", "Saving devcontainer config");
     const repoResult = await getCurrentRepoRoot();
     if (!repoResult.ok) {
+      logPrerequisites("error", "Cannot save devcontainer config: no repository found");
       throw new Error("No repository found");
     }
 
     const result = await saveDevcontainerConfigService(repoResult.value, content);
     if (!result.ok) {
+      logPrerequisites("error", "Failed to save devcontainer config", { error: result.error.message });
       throw new Error(result.error.message);
     }
 
     // Refresh devcontainer state after save
     await checkDevcontainer();
+    logPrerequisites("info", "Devcontainer config saved successfully");
   }, [checkDevcontainer]);
 
   const revealConfig = useCallback(async () => {

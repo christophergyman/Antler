@@ -171,12 +171,16 @@ export function clearProjectSettingsCache(): void {
  * Check if a directory is a git repository
  */
 export async function isGitRepository(path: string): Promise<boolean> {
+  logProject("debug", "Checking if directory is git repository", { path });
   try {
     const command = Command.create("run-git", ["rev-parse", "--git-dir"]);
     command.options.cwd = path;
     const output = await command.execute();
-    return output.code === 0;
+    const isRepo = output.code === 0;
+    logProject("debug", "Git repository check complete", { path, isGitRepo: isRepo });
+    return isRepo;
   } catch {
+    logProject("debug", "Git repository check failed", { path, isGitRepo: false });
     return false;
   }
 }
@@ -214,15 +218,20 @@ export function extractOwnerRepo(url: string): string | null {
  * Get the git remote origin URL for a repository
  */
 export async function getGitRemoteUrl(path: string): Promise<string | null> {
+  logProject("debug", "Getting git remote URL", { path });
   try {
     const command = Command.create("run-git", ["config", "--get", "remote.origin.url"]);
     command.options.cwd = path;
     const output = await command.execute();
     if (output.code === 0 && output.stdout.trim()) {
-      return output.stdout.trim();
+      const remoteUrl = output.stdout.trim();
+      logProject("debug", "Git remote URL found", { path, remoteUrl });
+      return remoteUrl;
     }
+    logProject("debug", "No git remote URL configured", { path });
     return null;
   } catch {
+    logProject("debug", "Failed to get git remote URL", { path });
     return null;
   }
 }

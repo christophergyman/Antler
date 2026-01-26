@@ -8,6 +8,7 @@ import { SettingsRow } from "./SettingsRow";
 import { Button } from "../ui/button";
 import type { StatusIndicator } from "./types";
 import { initiateGitHubAuth } from "@services/github";
+import { logUserAction, logDataSync } from "@services/logging";
 
 interface GitHubAuthSectionProps {
   isAuthenticated: boolean | null;
@@ -40,6 +41,7 @@ export function GitHubAuthSection({
   }
 
   const handleLogin = async () => {
+    logUserAction("github_auth", "User initiated GitHub login");
     setIsAuthenticating(true);
     setError(null);
 
@@ -48,8 +50,10 @@ export function GitHubAuthSection({
     setIsAuthenticating(false);
 
     if (result.ok) {
+      logDataSync("info", "GitHub authentication successful");
       onAuthChange();
     } else {
+      logDataSync("error", "GitHub authentication failed", { error: result.error.message });
       setError(result.error.message);
     }
   };

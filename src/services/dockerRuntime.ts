@@ -52,21 +52,29 @@ function setStatus(newStatus: DockerRuntimeStatus): void {
 // ============================================================================
 
 async function isDockerRunning(): Promise<boolean> {
+  logDocker("debug", "Checking if Docker is running");
   try {
     const cmd = Command.create("run-docker", ["info"]);
     const output = await cmd.execute();
-    return output.code === 0;
+    const isRunning = output.code === 0;
+    logDocker("debug", "Docker running check complete", { isRunning });
+    return isRunning;
   } catch {
+    logDocker("debug", "Docker running check failed", { isRunning: false });
     return false;
   }
 }
 
 async function isColimaInstalled(): Promise<boolean> {
+  logDocker("debug", "Checking if Colima is installed");
   try {
     const cmd = Command.create("run-colima", ["version"]);
     const output = await cmd.execute();
-    return output.code === 0;
+    const isInstalled = output.code === 0;
+    logDocker("debug", "Colima installation check complete", { isInstalled });
+    return isInstalled;
   } catch {
+    logDocker("debug", "Colima installation check failed", { isInstalled: false });
     return false;
   }
 }

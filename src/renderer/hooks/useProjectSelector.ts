@@ -15,6 +15,7 @@ import {
   selectCloneDestination,
   clearProjectSettingsCache,
 } from "@services/project";
+import { logProject, logUserAction } from "@services/logging";
 
 export interface UseProjectSelectorReturn {
   settings: ProjectSettings | null;
@@ -36,6 +37,7 @@ export function useProjectSelector(): UseProjectSelectorReturn {
   const [error, setError] = useState<string | null>(null);
 
   const loadSettings = useCallback(async () => {
+    logProject("debug", "Loading project settings");
     setIsLoading(true);
     setError(null);
 
@@ -48,15 +50,24 @@ export function useProjectSelector(): UseProjectSelectorReturn {
         const infoResult = await getProjectInfo(result.value.currentProject);
         if (infoResult.ok) {
           setCurrentProjectInfo(infoResult.value);
+          logProject("debug", "Project settings loaded with current project", {
+            currentProject: result.value.currentProject,
+            projectName: infoResult.value.name,
+          });
         } else {
           // Project path no longer exists, clear it
           setCurrentProjectInfo(null);
+          logProject("warn", "Current project path no longer exists", {
+            path: result.value.currentProject,
+          });
         }
       } else {
         setCurrentProjectInfo(null);
+        logProject("debug", "Project settings loaded, no current project");
       }
     } else {
       setError(result.error.message);
+      logProject("error", "Failed to load project settings", { error: result.error.message });
     }
 
     setIsLoading(false);
@@ -67,12 +78,16 @@ export function useProjectSelector(): UseProjectSelectorReturn {
   }, [loadSettings]);
 
   const selectProject = useCallback(async (): Promise<boolean> => {
+    logUserAction("project_select", "Opening project picker");
     setError(null);
 
     const pickerResult = await openProjectPicker();
     if (!pickerResult.ok) {
       if (pickerResult.error.code !== "dialog_cancelled") {
         setError(pickerResult.error.message);
+        logProject("error", "Project picker failed", { error: pickerResult.error.message });
+      } else {
+        logProject("debug", "Project picker cancelled by user");
       }
       return false;
     }
@@ -80,41 +95,50 @@ export function useProjectSelector(): UseProjectSelectorReturn {
     const setResult = await setCurrentProject(pickerResult.value);
     if (!setResult.ok) {
       setError(setResult.error.message);
+      logProject("error", "Failed to set current project", { error: setResult.error.message });
       return false;
     }
 
     // Refresh settings after changing project
     clearProjectSettingsCache();
     await loadSettings();
+    logProject("info", "Project selected successfully", { path: pickerResult.value });
     return true;
   }, [loadSettings]);
 
   const selectRecentProject = useCallback(async (path: string): Promise<boolean> => {
+    logUserAction("project_select_recent", "Selecting recent project", { path });
     setError(null);
 
     const setResult = await setCurrentProject(path);
     if (!setResult.ok) {
       setError(setResult.error.message);
+      logProject("error", "Failed to select recent project", { path, error: setResult.error.message });
       return false;
     }
 
     clearProjectSettingsCache();
     await loadSettings();
+    logProject("info", "Recent project selected successfully", { path });
     return true;
   }, [loadSettings]);
 
   const removeRecent = useCallback(async (path: string): Promise<void> => {
+    logUserAction("project_remove_recent", "Removing recent project", { path });
     const result = await removeFromRecentProjects(path);
     if (!result.ok) {
       setError(result.error.message);
+      logProject("error", "Failed to remove recent project", { path, error: result.error.message });
       return;
     }
 
     clearProjectSettingsCache();
     await loadSettings();
+    logProject("debug", "Recent project removed successfully", { path });
   }, [loadSettings]);
 
   const cloneAndSelect = useCallback(async (repoUrl: string, parentDir?: string): Promise<boolean> => {
+    logUserAction("project_clone", "Starting repository clone", { repoUrl });
     setError(null);
 
     // If no parent dir provided, open picker
@@ -124,6 +148,9 @@ export function useProjectSelector(): UseProjectSelectorReturn {
       if (!destResult.ok) {
         if (destResult.error.code !== "dialog_cancelled") {
           setError(destResult.error.message);
+          logProject("error", "Clone destination selection failed", { error: destResult.error.message });
+        } else {
+          logProject("debug", "Clone destination selection cancelled");
         }
         return false;
       }
@@ -135,9 +162,11 @@ export function useProjectSelector(): UseProjectSelectorReturn {
     const targetDir = `${destination}/${repoName}`;
 
     // Clone the repository
+    logProject("info", "Cloning repository", { repoUrl, targetDir });
     const cloneResult = await cloneRepository(repoUrl, targetDir);
     if (!cloneResult.ok) {
       setError(cloneResult.error.message);
+      logProject("error", "Repository clone failed", { repoUrl, error: cloneResult.error.message });
       return false;
     }
 
@@ -145,15 +174,18 @@ export function useProjectSelector(): UseProjectSelectorReturn {
     const setResult = await setCurrentProject(targetDir);
     if (!setResult.ok) {
       setError(setResult.error.message);
+      logProject("error", "Failed to set cloned project as current", { targetDir, error: setResult.error.message });
       return false;
     }
 
     clearProjectSettingsCache();
     await loadSettings();
+    logProject("info", "Repository cloned and selected successfully", { repoUrl, targetDir });
     return true;
   }, [loadSettings]);
 
   const refresh = useCallback(async () => {
+    logProject("debug", "Refreshing project settings");
     clearProjectSettingsCache();
     await loadSettings();
   }, [loadSettings]);
