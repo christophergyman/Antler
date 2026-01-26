@@ -1,9 +1,10 @@
 /**
  * Configuration Loader
- * Loads and validates antler.yaml using Tauri FS plugin
+ * Loads and validates antler.yaml from app data directory using Tauri FS plugin
  */
 
-import { readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { appDataDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { load, dump } from "js-yaml";
 import type { ConfigResult } from "@core/types/result";
@@ -79,75 +80,68 @@ function validateConfig(raw: unknown): ConfigResult<AntlerConfig> {
 const CONFIG_FILENAME = "antler.yaml";
 
 /**
- * Get current working directory via shell command
+ * Get the full path to the global config file
+ * Returns path in app data directory (e.g., ~/Library/Application Support/com.antler.app/antler.yaml)
  */
-async function getCurrentDir(): Promise<string> {
-  const command = Command.create("run-pwd");
+export async function getConfigLocation(): Promise<string> {
+  const appData = await appDataDir();
+  return `${appData}${CONFIG_FILENAME}`;
+}
+
+/**
+ * Reveal the config file in macOS Finder
+ * Uses osascript (AppleScript) to reveal in Finder - this handles paths with .app in directory names correctly
+ * Falls back to opening the directory if the file doesn't exist yet
+ */
+export async function revealConfigInFinder(): Promise<void> {
+  const configPath = await getConfigLocation();
+  logConfig("debug", "Revealing config in Finder", { path: configPath });
+
+  // Check if file exists, if not reveal the directory instead
+  const fileExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+  const targetPath = fileExists ? configPath : await appDataDir();
+
+  // Use osascript to reveal in Finder (handles .app in path correctly)
+  const command = Command.create("run-osascript", [
+    "-e", `tell application "Finder" to reveal POSIX file "${targetPath}"`,
+    "-e", `tell application "Finder" to activate`
+  ]);
+
   const output = await command.execute();
+
   if (output.code !== 0) {
-    throw new Error(`Failed to get cwd: ${output.stderr}`);
+    logConfig("error", "Failed to reveal in Finder", {
+      code: output.code,
+      stderr: output.stderr
+    });
+  } else {
+    logConfig("info", "Revealed config location in Finder", { path: targetPath, fileExists });
   }
-  return output.stdout.trim();
 }
 
 /**
- * Get parent directory path (resolves without using ../)
- */
-function getParentDir(path: string): string {
-  const segments = path.split("/").filter(Boolean);
-  segments.pop();
-  return "/" + segments.join("/");
-}
-
-/**
- * Find config file path, checking cwd and parent directory
- * Handles the case where pwd returns src-tauri/ in dev mode
- */
-async function findConfigPath(): Promise<string | null> {
-  const cwd = await getCurrentDir();
-
-  // Check cwd first (normal case)
-  const cwdPath = `${cwd}/${CONFIG_FILENAME}`;
-  if (await exists(cwdPath)) {
-    logConfig("debug", "Config found in cwd", { path: cwdPath });
-    return cwdPath;
-  }
-
-  // Check parent directory (handles src-tauri/ case in dev mode)
-  const parentDir = getParentDir(cwd);
-  const parentPath = `${parentDir}/${CONFIG_FILENAME}`;
-  if (await exists(parentPath)) {
-    logConfig("debug", "Config found in parent directory", { path: parentPath });
-    return parentPath;
-  }
-
-  logConfig("debug", "Config not found", { checked: [cwdPath, parentPath] });
-  return null;
-}
-
-/**
- * Load config from current working directory or parent
- * Uses the directory where the app was launched (project root in typical usage)
+ * Load config from app data directory
+ * The global config applies to the currently selected project
  */
 export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
-  logConfig("debug", "Loading config");
+  logConfig("debug", "Loading config from app data directory");
 
   try {
-    const configPath = await findConfigPath();
+    const configExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
 
-    if (!configPath) {
-      const cwd = await getCurrentDir();
-      logConfig("warn", "Config file not found", { cwd });
+    if (!configExists) {
+      const configPath = await getConfigLocation();
+      logConfig("warn", "Config file not found", { path: configPath });
       return err(
         createConfigError(
           "config_not_found",
-          "Config file not found. Create antler.yaml in project root",
-          `Checked: ${cwd}/${CONFIG_FILENAME} and parent directory`
+          "Config file not found",
+          `Expected at: ${configPath}`
         )
       );
     }
 
-    const fileContent = await readTextFile(configPath);
+    const fileContent = await readTextFile(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
 
     let parsed: unknown;
     try {
@@ -166,6 +160,7 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
     const result = validateConfig(parsed);
     if (result.ok) {
       logConfig("info", "Config loaded successfully", { repo: result.value.github.repository });
+      cachedConfig = result.value;
     } else {
       logConfig("error", "Config validation failed", { code: result.error.code });
     }
@@ -183,32 +178,14 @@ export async function loadConfig(): Promise<ConfigResult<AntlerConfig>> {
 }
 
 // ============================================================================
-// Config Path
-// ============================================================================
-
-/**
- * Get the config file path
- * Returns the path where antler.yaml exists or should be created
- */
-export async function getConfigFilePath(): Promise<string> {
-  const configPath = await findConfigPath();
-  if (configPath) {
-    return configPath;
-  }
-  // Default to cwd if not found
-  const cwd = await getCurrentDir();
-  return `${cwd}/${CONFIG_FILENAME}`;
-}
-
-// ============================================================================
 // Config Save
 // ============================================================================
 
 /**
- * Save config to antler.yaml
+ * Save config to app data directory
  */
 export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<void>> {
-  logConfig("debug", "Saving config");
+  logConfig("debug", "Saving config to app data directory");
 
   // Validate before saving
   const validation = validateConfig({ github: { repository: config.github.repository } });
@@ -218,12 +195,16 @@ export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<voi
   }
 
   try {
-    const configPath = await getConfigFilePath();
+    // Ensure AppData directory exists
+    await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
+
     const yamlContent = dump({ github: { repository: config.github.repository } });
+    await writeTextFile(CONFIG_FILENAME, yamlContent, { baseDir: BaseDirectory.AppData });
 
-    await writeTextFile(configPath, yamlContent);
-    clearConfigCache();
+    // Update cache
+    cachedConfig = config;
 
+    const configPath = await getConfigLocation();
     logConfig("info", "Config saved successfully", { path: configPath, repo: config.github.repository });
     return ok(undefined);
   } catch (error) {
@@ -278,6 +259,163 @@ export async function getCachedConfig(): Promise<ConfigResult<AntlerConfig>> {
 
 export function clearConfigCache(): void {
   cachedConfig = null;
+}
+
+// ============================================================================
+// Config File Operations (for YAML Editor)
+// ============================================================================
+
+/**
+ * Check if antler.yaml config file exists
+ */
+export async function configFileExists(): Promise<boolean> {
+  return await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+}
+
+/**
+ * Get raw YAML content as string (for editor display)
+ */
+export async function getConfigContent(): Promise<ConfigResult<string>> {
+  try {
+    const configExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+
+    if (!configExists) {
+      const configPath = await getConfigLocation();
+      return err(
+        createConfigError(
+          "config_not_found",
+          "Config file not found",
+          `Expected at: ${configPath}`
+        )
+      );
+    }
+
+    const content = await readTextFile(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+    return ok(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to read config content", { error: message });
+    return err(
+      createConfigError(
+        "config_not_found",
+        "Failed to read config file",
+        message
+      )
+    );
+  }
+}
+
+/**
+ * Save raw YAML content to config file
+ * Parses and validates YAML before saving
+ */
+export async function saveConfigContent(yamlString: string): Promise<ConfigResult<void>> {
+  logConfig("debug", "Saving config content");
+
+  // Parse YAML first to validate syntax
+  let parsed: unknown;
+  try {
+    parsed = load(yamlString);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Invalid YAML syntax", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Invalid YAML syntax",
+        message
+      )
+    );
+  }
+
+  // Validate config structure (but allow empty repository for initial setup)
+  if (!parsed || typeof parsed !== "object") {
+    return err(
+      createConfigError("config_invalid", "Config must be an object")
+    );
+  }
+
+  const config = parsed as RawConfig;
+
+  if (!config.github || typeof config.github !== "object") {
+    return err(
+      createConfigError("config_invalid", "Missing 'github' section in config")
+    );
+  }
+
+  // Repository can be empty string but must be a string if present
+  if (config.github.repository !== undefined && typeof config.github.repository !== "string") {
+    return err(
+      createConfigError(
+        "config_invalid",
+        "Repository must be a string"
+      )
+    );
+  }
+
+  try {
+    // Ensure AppData directory exists
+    await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
+
+    // Write the raw YAML content (preserving user formatting)
+    await writeTextFile(CONFIG_FILENAME, yamlString, { baseDir: BaseDirectory.AppData });
+
+    // Clear cache so next load reads fresh data
+    cachedConfig = null;
+
+    const configPath = await getConfigLocation();
+    logConfig("info", "Config content saved successfully", { path: configPath });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to save config content", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Failed to save config file",
+        message
+      )
+    );
+  }
+}
+
+/**
+ * Ensure config file exists, creating minimal template if not
+ */
+export async function ensureConfigExists(): Promise<ConfigResult<void>> {
+  const configExists = await exists(CONFIG_FILENAME, { baseDir: BaseDirectory.AppData });
+
+  if (configExists) {
+    logConfig("debug", "Config file already exists");
+    return ok(undefined);
+  }
+
+  logConfig("info", "Creating initial config file");
+
+  try {
+    // Ensure AppData directory exists
+    await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
+
+    const template = `github:
+  repository: ""
+`;
+
+    await writeTextFile(CONFIG_FILENAME, template, { baseDir: BaseDirectory.AppData });
+
+    const configPath = await getConfigLocation();
+    logConfig("info", "Initial config file created", { path: configPath });
+    return ok(undefined);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logConfig("error", "Failed to create initial config", { error: message });
+    return err(
+      createConfigError(
+        "config_parse_error",
+        "Failed to create config file",
+        message
+      )
+    );
+  }
 }
 
 // ============================================================================

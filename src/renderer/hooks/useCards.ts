@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Card } from '@core/types/card';
 import type { ConfigError, GitHubError } from '@core/types/result';
 import { getCachedConfig } from '@services/config';
@@ -19,7 +19,7 @@ interface UseCardsReturn {
   isRefreshing: boolean;
   error: string | null;
   errorCode: string | null;
-  refresh: () => Promise<void>;
+  refresh: (clearExisting?: boolean) => Promise<void>;
 }
 
 type FetchError = ConfigError | GitHubError;
@@ -44,7 +44,7 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
   const cardsRef = useRef<Card[]>(cards);
   cardsRef.current = cards;
 
-  const fetchCards = useCallback(async () => {
+  const fetchCards = useCallback(async (clearExisting = false) => {
     const isInitial = !hasFetched.current;
     const startTime = Date.now();
 
@@ -90,8 +90,9 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       }
 
       // Sync cards with fetched issues
-      // Use ref to get current cards without dependency
-      const syncResult = syncCards(cardsRef.current, issuesResult.value);
+      // Use ref to get current cards without dependency, or empty array when clearing
+      const currentCards = clearExisting ? [] : cardsRef.current;
+      const syncResult = syncCards(currentCards, issuesResult.value);
       setCards(syncResult.cards);
 
       logDataSync('info', 'Sync completed', {
