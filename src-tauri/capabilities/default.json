@@ -131,6 +131,10 @@
       "identifier": "fs:allow-write-text-file",
       "allow": [{ "path": "/**" }]
     },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "/**" }]
+    },
     "core:path:default",
     "os:default",
     "dialog:allow-open"

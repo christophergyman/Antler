@@ -13,6 +13,7 @@ import { AntlerConfigSection } from "./AntlerConfigSection";
 import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
 import { ProjectSection } from "./ProjectSection";
+import { TerminalSettingsSection } from "./TerminalSettingsSection";
 import { useSettings } from "../../hooks/useSettings";
 
 export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanelProps) {
@@ -137,6 +138,15 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
               configContent={settings.devcontainerConfig}
               configPath={settings.devcontainerConfigPath}
               onSave={settings.saveDevcontainerConfig}
+            />
+          </SettingsGroup>
+
+          {/* Terminal Settings Group */}
+          <SettingsGroup title="Terminal">
+            <TerminalSettingsSection
+              terminalApp={settings.terminalApp}
+              postOpenCommand={settings.postOpenCommand}
+              onSave={settings.saveTerminalSettings}
             />
           </SettingsGroup>
         </div>

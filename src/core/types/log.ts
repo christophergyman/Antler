@@ -47,7 +47,9 @@ export type UserActionType =
   | "project_select_recent"
   | "project_remove_recent"
   | "project_clone"
-  | "github_auth";
+  | "github_auth"
+  | "open_terminal"
+  | "settings_save";
 
 // ============================================================================
 // Log Entry

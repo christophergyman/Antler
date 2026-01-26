@@ -34,6 +34,8 @@ export interface CommandOptions {
   isRetryable?: (result: CommandResult) => boolean;
   /** Log category for logging */
   logCategory?: string;
+  /** Suppress error-level logging for expected failures (logs at debug instead) */
+  suppressErrorLog?: boolean;
 }
 
 /** Error types that can be determined from command output */
@@ -139,6 +141,7 @@ export async function executeCommand(
     maxRetryDelayMs = DEFAULT_MAX_RETRY_DELAY_MS,
     isRetryable = defaultIsRetryable,
     logCategory = "system",
+    suppressErrorLog = false,
   } = options;
 
   const commandPreview = createCommandPreview(
@@ -200,7 +203,7 @@ export async function executeCommand(
   }
 
   // All attempts failed
-  return createErrorResult(lastResult, commandPreview, logCategory);
+  return createErrorResult(lastResult, commandPreview, logCategory, suppressErrorLog);
 }
 
 /**
@@ -292,7 +295,8 @@ async function executeOnce(
 function createErrorResult(
   result: CommandResult | null,
   commandPreview: string,
-  logCategory: string
+  logCategory: string,
+  suppressErrorLog = false
 ): ExecuteResult {
   if (!result) {
     logSystem("error", `Command failed with no result: ${commandPreview}`, { category: logCategory });
@@ -324,7 +328,9 @@ function createErrorResult(
     message = "Network error";
   }
 
-  logSystem("error", `${message}: ${commandPreview}`, {
+  // Log at debug level if error is expected, otherwise at error level
+  const logLevel = suppressErrorLog ? "debug" : "error";
+  logSystem(logLevel, `${message}: ${commandPreview}`, {
     category: logCategory,
     exitCode: result.exitCode,
   });
@@ -382,4 +388,24 @@ export async function executeDevcontainer(
   options: Omit<CommandOptions, "logCategory"> = {}
 ): Promise<ExecuteResult> {
   return executeCommand("run-devcontainer", args, { ...options, logCategory: "devcontainer" });
+}
+
+/**
+ * Execute macOS open command (for opening applications/files)
+ */
+export async function executeOpen(
+  args: string[],
+  options: Omit<CommandOptions, "logCategory"> = {}
+): Promise<ExecuteResult> {
+  return executeCommand("run-open", args, { ...options, logCategory: "user_action" });
+}
+
+/**
+ * Execute osascript (AppleScript) command
+ */
+export async function executeOsascript(
+  args: string[],
+  options: Omit<CommandOptions, "logCategory"> = {}
+): Promise<ExecuteResult> {
+  return executeCommand("run-osascript", args, { ...options, logCategory: "user_action" });
 }

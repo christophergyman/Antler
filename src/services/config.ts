@@ -19,13 +19,23 @@ export interface GitHubConfig {
   readonly repository: string;
 }
 
+export interface TerminalSettings {
+  readonly app?: string;           // e.g., "/Applications/iTerm.app" or "Terminal"
+  readonly postOpenCommand?: string; // e.g., "bun run dev"
+}
+
 export interface AntlerConfig {
   readonly github: GitHubConfig;
+  readonly terminal?: TerminalSettings;
 }
 
 interface RawConfig {
   github?: {
     repository?: unknown;
+  };
+  terminal?: {
+    app?: unknown;
+    postOpenCommand?: unknown;
   };
 }
 
@@ -37,6 +47,23 @@ const REPO_PATTERN = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
 
 function validateRepository(repo: unknown): repo is string {
   return typeof repo === "string" && REPO_PATTERN.test(repo);
+}
+
+function validateTerminalSettings(terminal: unknown): TerminalSettings | undefined {
+  if (!terminal || typeof terminal !== "object") {
+    return undefined;
+  }
+  const t = terminal as RawConfig["terminal"];
+  const result: { app?: string; postOpenCommand?: string } = {};
+
+  if (t?.app !== undefined && typeof t.app === "string" && t.app.trim()) {
+    result.app = t.app.trim();
+  }
+  if (t?.postOpenCommand !== undefined && typeof t.postOpenCommand === "string" && t.postOpenCommand.trim()) {
+    result.postOpenCommand = t.postOpenCommand.trim();
+  }
+
+  return Object.keys(result).length > 0 ? Object.freeze(result) : undefined;
 }
 
 function validateConfig(raw: unknown): ConfigResult<AntlerConfig> {
@@ -64,13 +91,16 @@ function validateConfig(raw: unknown): ConfigResult<AntlerConfig> {
     );
   }
 
-  return ok(
-    Object.freeze({
-      github: Object.freeze({
-        repository: config.github.repository,
-      }),
-    })
-  );
+  const terminalSettings = validateTerminalSettings(config.terminal);
+
+  const result: AntlerConfig = {
+    github: Object.freeze({
+      repository: config.github.repository,
+    }),
+    ...(terminalSettings && { terminal: terminalSettings }),
+  };
+
+  return ok(Object.freeze(result));
 }
 
 // ============================================================================
@@ -188,7 +218,11 @@ export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<voi
   logConfig("debug", "Saving config to app data directory");
 
   // Validate before saving
-  const validation = validateConfig({ github: { repository: config.github.repository } });
+  const rawConfig: RawConfig = {
+    github: { repository: config.github.repository },
+    ...(config.terminal && { terminal: config.terminal }),
+  };
+  const validation = validateConfig(rawConfig);
   if (!validation.ok) {
     logConfig("error", "Config validation failed before save", { code: validation.error.code });
     return validation;
@@ -198,11 +232,22 @@ export async function saveConfig(config: AntlerConfig): Promise<ConfigResult<voi
     // Ensure AppData directory exists
     await mkdir("", { recursive: true, baseDir: BaseDirectory.AppData });
 
-    const yamlContent = dump({ github: { repository: config.github.repository } });
+    // Build YAML content with optional terminal section
+    const configData: Record<string, unknown> = {
+      github: { repository: config.github.repository },
+    };
+    if (config.terminal) {
+      configData.terminal = config.terminal;
+    }
+
+    const yamlContent = dump(configData);
     await writeTextFile(CONFIG_FILENAME, yamlContent, { baseDir: BaseDirectory.AppData });
 
     // Update cache
-    cachedConfig = config;
+    cachedConfig = {
+      value: config,
+      timestamp: Date.now(),
+    };
 
     const configPath = await getConfigLocation();
     logConfig("info", "Config saved successfully", { path: configPath, repo: config.github.repository });
@@ -470,4 +515,38 @@ export async function getCurrentRepoRoot(): Promise<ConfigResult<string>> {
 
 export function clearRepoRootCache(): void {
   cachedRepoRoot = null;
+}
+
+// ============================================================================
+// Terminal Settings Getters
+// ============================================================================
+
+/**
+ * Get the configured terminal app (e.g., "iTerm" or "/Applications/iTerm.app")
+ * Returns null if not configured (will use system default)
+ */
+export async function getTerminalApp(): Promise<string | null> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get terminal app - config unavailable");
+    return null;
+  }
+  const app = result.value.terminal?.app ?? null;
+  logConfig("debug", "Retrieved terminal app setting", { app });
+  return app;
+}
+
+/**
+ * Get the post-open command to run after terminal opens
+ * Returns null if not configured
+ */
+export async function getPostOpenCommand(): Promise<string | null> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get post-open command - config unavailable");
+    return null;
+  }
+  const command = result.value.terminal?.postOpenCommand ?? null;
+  logConfig("debug", "Retrieved post-open command setting", { hasCommand: Boolean(command) });
+  return command;
 }

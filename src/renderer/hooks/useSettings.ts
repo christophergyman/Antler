@@ -13,6 +13,8 @@ import {
   configFileExists,
   getConfigContent,
   saveConfigContent,
+  getTerminalApp,
+  getPostOpenCommand,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import {
@@ -47,6 +49,9 @@ interface SettingsState {
   hasDevcontainerConfig: boolean | null;
   devcontainerConfig: string | null;
   devcontainerConfigPath: string | null;
+  // Terminal
+  terminalApp: string | null;
+  postOpenCommand: string | null;
 }
 
 export function useSettings() {
@@ -66,6 +71,8 @@ export function useSettings() {
     hasDevcontainerConfig: null,
     devcontainerConfig: null,
     devcontainerConfigPath: null,
+    terminalApp: null,
+    postOpenCommand: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -199,6 +206,67 @@ export function useSettings() {
     }
   }, []);
 
+  const loadTerminalSettings = useCallback(async () => {
+    logConfig("debug", "Loading terminal settings");
+    const [app, command] = await Promise.all([
+      getTerminalApp(),
+      getPostOpenCommand(),
+    ]);
+    setState((prev) => ({
+      ...prev,
+      terminalApp: app,
+      postOpenCommand: command,
+    }));
+    logConfig("debug", "Terminal settings loaded", { app, command });
+  }, []);
+
+  const saveTerminalSettings = useCallback(async (app: string, command: string): Promise<void> => {
+    logConfig("info", "Saving terminal settings", { app, command });
+
+    // Load current config content and update it
+    const contentResult = await getConfigContent();
+    if (!contentResult.ok) {
+      // Create new config with terminal settings
+      logConfig("debug", "Config file does not exist, creating new config");
+      const newContent = `github:
+  repository: ""
+${app || command ? `terminal:
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}` : ""}`;
+      await saveConfigContent(newContent);
+    } else {
+      // Parse and update existing config
+      logConfig("debug", "Parsing existing YAML config for terminal settings update");
+      try {
+        const { load, dump } = await import("js-yaml");
+        const parsed = load(contentResult.value) as Record<string, unknown>;
+
+        // Update terminal section
+        if (app || command) {
+          parsed.terminal = {
+            ...(app && { app }),
+            ...(command && { postOpenCommand: command }),
+          };
+        } else {
+          delete parsed.terminal;
+        }
+
+        const updatedContent = dump(parsed);
+        logConfig("debug", "YAML config updated, saving to file");
+        await saveConfigContent(updatedContent);
+      } catch (yamlError) {
+        const message = yamlError instanceof Error ? yamlError.message : String(yamlError);
+        logConfig("error", "Failed to parse YAML config for terminal settings", { error: message });
+        throw yamlError;
+      }
+    }
+
+    // Refresh terminal settings after save
+    logConfig("debug", "Clearing config cache and reloading terminal settings");
+    clearConfigCache();
+    await loadTerminalSettings();
+    logConfig("info", "Terminal settings saved successfully");
+  }, [loadTerminalSettings]);
+
   const refresh = useCallback(() => {
     logConfig("debug", "Refreshing all settings");
     clearConfigCache();
@@ -208,7 +276,8 @@ export function useSettings() {
     checkAuth();
     checkDocker();
     checkDevcontainer();
-  }, [checkConfig, loadAntlerConfig, checkGitRepo, checkAuth, checkDocker, checkDevcontainer]);
+    loadTerminalSettings();
+  }, [checkConfig, loadAntlerConfig, checkGitRepo, checkAuth, checkDocker, checkDevcontainer, loadTerminalSettings]);
 
   const saveDevcontainerConfig = useCallback(async (content: string): Promise<void> => {
     logPrerequisites("info", "Saving devcontainer config");
@@ -251,6 +320,7 @@ export function useSettings() {
     refresh,
     saveDevcontainerConfig,
     saveAntlerConfig,
+    saveTerminalSettings,
     revealConfig,
   };
 }

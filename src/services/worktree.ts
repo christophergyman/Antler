@@ -3,6 +3,7 @@
  * Creates and manages git worktrees for parallel work sessions
  */
 
+import { exists, remove } from "@tauri-apps/plugin-fs";
 import type { WorktreeResult } from "@core/types/result";
 import { ok, err, createWorktreeError } from "@core/types/result";
 import { logWorktree } from "./logging";
@@ -136,12 +137,13 @@ function mapCommandResultToWorktreeResult(
  */
 async function execGit(
   args: string[],
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  suppressErrorLog = false
 ): Promise<WorktreeResult<string>> {
   const commandPreview = `git ${args.slice(0, 4).join(" ")}${args.length > 4 ? "..." : ""}`;
   logWorktree("debug", `Executing: ${commandPreview}`);
 
-  const result = await executeGit(args, { timeoutMs });
+  const result = await executeGit(args, { timeoutMs, suppressErrorLog });
 
   if (result.ok) {
     return mapCommandResultToWorktreeResult(result.value, commandPreview);
@@ -173,7 +175,8 @@ async function execGit(
  * Check if a branch exists (locally or remotely)
  */
 async function branchExists(branchName: string): Promise<boolean> {
-  const result = await execGit(["rev-parse", "--verify", branchName]);
+  // suppressErrorLog: true because exit code 128 is expected when branch doesn't exist
+  const result = await execGit(["rev-parse", "--verify", branchName], DEFAULT_TIMEOUT_MS, true);
   return result.ok;
 }
 
@@ -181,7 +184,8 @@ async function branchExists(branchName: string): Promise<boolean> {
  * Check if a remote branch exists
  */
 async function remoteBranchExists(branchName: string): Promise<boolean> {
-  const result = await execGit(["ls-remote", "--heads", "origin", branchName]);
+  // suppressErrorLog: true because failure is expected when branch doesn't exist
+  const result = await execGit(["ls-remote", "--heads", "origin", branchName], DEFAULT_TIMEOUT_MS, true);
   return result.ok && result.value.trim().length > 0;
 }
 
@@ -212,15 +216,37 @@ export async function createWorktree(
     return err(createWorktreeError("worktree_create_failed", "Operation cancelled"));
   }
 
+  // Check if worktree already exists in git - reuse it
+  const gitKnowsWorktree = await worktreeExists(repoRoot, branchName);
+  if (gitKnowsWorktree) {
+    logWorktree("info", "Worktree already exists, reusing", { branchName, path: worktreePath });
+    return ok({ path: worktreePath, branchName });
+  }
+
+  // Check if directory exists but git doesn't know about it (orphaned)
+  const dirExists = await exists(worktreePath);
+  if (dirExists) {
+    logWorktree("warn", "Removing orphaned worktree directory", { branchName, path: worktreePath });
+    try {
+      await remove(worktreePath, { recursive: true });
+    } catch (e) {
+      return err(createWorktreeError(
+        "worktree_create_failed",
+        "Failed to remove orphaned worktree directory",
+        String(e)
+      ));
+    }
+  }
+
   // Check if branch exists
-  const exists = await branchExists(branchName);
+  const localBranchExists = await branchExists(branchName);
   const remoteExists = await remoteBranchExists(branchName);
 
   let result: WorktreeResult<string>;
 
-  if (exists || remoteExists) {
+  if (localBranchExists || remoteExists) {
     // Use existing branch
-    logWorktree("debug", "Using existing branch", { branchName, local: exists, remote: remoteExists });
+    logWorktree("debug", "Using existing branch", { branchName, local: localBranchExists, remote: remoteExists });
     result = await execGit(["worktree", "add", worktreePath, branchName]);
   } else {
     // Create new branch from current HEAD

@@ -5,3 +5,14 @@ github:
   # The GitHub repository to fetch issues from
   # Format: owner/repo (e.g., "facebook/react")
   repository: owner/repo
+
+# Terminal settings (optional)
+# Configure the terminal app for opening worktrees
+terminal:
+  # Application to use when opening terminal
+  # Can be app name (e.g., "iTerm") or full path (e.g., "/Applications/iTerm.app")
+  # If not specified, uses the default Terminal app
+  app: Terminal
+  # Command to run after terminal opens at the worktree directory (optional)
+  # This is typed into the terminal automatically after it opens
+  postOpenCommand: bun run dev
