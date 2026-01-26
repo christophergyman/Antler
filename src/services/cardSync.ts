@@ -7,6 +7,7 @@ import type { Card } from "@core/types/card";
 import type { GitHubInfo } from "@core/types/github";
 import { createCard, updateGitHub } from "@core/card";
 import { findByIssueNumber } from "@core/utils/collection";
+import { logDataSync } from "./logging";
 
 // ============================================================================
 // Types
@@ -41,6 +42,11 @@ export function syncCards(
   existingCards: readonly Card[],
   issues: readonly GitHubInfo[]
 ): SyncResult {
+  logDataSync("debug", "Syncing cards with GitHub issues", {
+    existingCardCount: existingCards.length,
+    issueCount: issues.length,
+  });
+
   const updatedCards: Card[] = [];
   const processedIssueNumbers = new Set<number>();
 
@@ -87,6 +93,8 @@ export function syncCards(
     preserved++;
   }
 
+  logDataSync("info", "Card sync completed", { created, updated, preserved, skipped });
+
   return {
     cards: updatedCards,
     stats: Object.freeze({ created, updated, preserved, skipped }),
@@ -101,9 +109,12 @@ export function syncCards(
  * Create Cards from GitHub issues (no merge, fresh creation)
  */
 export function createCardsFromIssues(issues: readonly GitHubInfo[]): Card[] {
-  return issues
+  logDataSync("debug", "Creating cards from issues", { issueCount: issues.length });
+  const cards = issues
     .filter((issue) => issue.issueNumber !== null)
     .map((issue) => createCard({ github: issue }));
+  logDataSync("debug", "Cards created from issues", { cardCount: cards.length });
+  return cards;
 }
 
 /**
@@ -114,13 +125,21 @@ export function findOrphanedCards(
   existingCards: readonly Card[],
   issues: readonly GitHubInfo[]
 ): Card[] {
+  logDataSync("debug", "Finding orphaned cards", {
+    existingCardCount: existingCards.length,
+    issueCount: issues.length,
+  });
+
   const fetchedIssueNumbers = new Set(
     issues.filter((i) => i.issueNumber !== null).map((i) => i.issueNumber)
   );
 
-  return existingCards.filter(
+  const orphaned = existingCards.filter(
     (card) =>
       card.github.issueNumber !== null &&
       !fetchedIssueNumbers.has(card.github.issueNumber)
   );
+
+  logDataSync("debug", "Orphaned cards found", { orphanedCount: orphaned.length });
+  return orphaned;
 }

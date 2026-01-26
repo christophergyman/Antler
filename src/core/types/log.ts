@@ -37,7 +37,12 @@ export type UserActionType =
   | "work_session_start"
   | "work_session_started"
   | "work_session_stop"
-  | "work_session_stopped";
+  | "work_session_stopped"
+  | "project_select"
+  | "project_select_recent"
+  | "project_remove_recent"
+  | "project_clone"
+  | "github_auth";
 
 // ============================================================================
 // Log Entry

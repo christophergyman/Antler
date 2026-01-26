@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { selectCloneDestination } from "@services/project";
+import { logProject, logUserAction } from "@services/logging";
 
 interface CloneRepositoryDialogProps {
   isOpen: boolean;
@@ -59,23 +60,30 @@ export function CloneRepositoryDialog({
   }
 
   const handleBrowse = async () => {
+    logProject("debug", "Opening clone destination picker");
     const result = await selectCloneDestination();
     if (result.ok) {
       setDestination(result.value);
+      logProject("debug", "Clone destination selected", { destination: result.value });
+    } else {
+      logProject("debug", "Clone destination picker cancelled");
     }
   };
 
   const handleClone = async () => {
     if (!repoUrl.trim()) {
+      logProject("debug", "Clone validation failed: no repository URL");
       setLocalError("Please enter a repository URL or owner/repo");
       return;
     }
 
     if (!destination.trim()) {
+      logProject("debug", "Clone validation failed: no destination folder");
       setLocalError("Please select a destination folder");
       return;
     }
 
+    logUserAction("project_clone", "User initiated clone", { repoUrl: repoUrl.trim(), destination });
     setIsCloning(true);
     setLocalError(null);
 
