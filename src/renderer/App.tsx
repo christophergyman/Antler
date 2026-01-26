@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
+import { useProjectSelector } from './hooks/useProjectSelector';
 import { Toggle } from './components/ui/toggle';
 import { SettingsPanel } from './components/SettingsPanel';
+import { ProjectSelectorDialog } from './components/ProjectSelector';
 import { NotificationProvider } from './context/NotificationContext';
 import { NotificationContainer } from './components/ui/NotificationContainer';
 import { NotificationPopover } from './components/ui/NotificationPopover';
-import { getCachedConfig, clearConfigCache } from '@services/config';
+import { getCachedConfig, clearConfigCache, loadConfig } from '@services/config';
 import { initLogger, shutdownLogger, logSystem } from '@services/logging';
 import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
 
@@ -141,22 +143,45 @@ function Header({
 
 export default function App() {
   const { dataSource, setDataSource, isMock } = useDataSource();
+  const projectSelector = useProjectSelector();
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
   const [repository, setRepository] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showProjectSelector, setShowProjectSelector] = useState(false);
+  const hasInitialized = useRef(false);
 
+  // Initialize project selector and load repository config
   useEffect(() => {
-    if (!isMock) {
+    // Skip if still loading
+    if (projectSelector.isLoading) return;
+
+    // Handle initialization (runs once)
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      if (!projectSelector.hasProject) {
+        setShowProjectSelector(true);
+        return;
+      }
+    }
+
+    // Handle mock mode - clear repository display
+    if (isMock) {
+      setRepository(null);
+      return;
+    }
+
+    // Load repository from config when we have a project
+    if (projectSelector.hasProject) {
       getCachedConfig().then(result => {
         if (result.ok) {
           setRepository(result.value.github.repository);
+        } else {
+          logSystem('warn', 'Failed to load repository from config', { code: result.error.code });
         }
       });
-    } else {
-      setRepository(null);
     }
-  }, [isMock]);
+  }, [isMock, projectSelector.isLoading, projectSelector.hasProject]);
 
   useEffect(() => {
     initLogger();
@@ -178,6 +203,24 @@ export default function App() {
   }, []);
 
   const renderContent = () => {
+    // Show loading while project selector is initializing
+    if (projectSelector.isLoading || !hasInitialized.current) {
+      return (
+        <div className="flex items-center justify-center flex-1">
+          <div className="text-gray-600">Loading...</div>
+        </div>
+      );
+    }
+
+    // If no project is selected, show message
+    if (!projectSelector.hasProject) {
+      return (
+        <div className="flex items-center justify-center flex-1">
+          <div className="text-gray-600">Select a project to get started</div>
+        </div>
+      );
+    }
+
     if (isLoading) {
       return (
         <div className="flex items-center justify-center flex-1">
@@ -212,16 +255,38 @@ export default function App() {
     );
   };
 
-  const handleConfigChange = () => {
+  const handleConfigChange = async () => {
     clearConfigCache();
     if (!isMock) {
-      getCachedConfig().then(result => {
-        if (result.ok) {
-          setRepository(result.value.github.repository);
-        }
-      });
-      refresh();
+      // Reload from global config (project service auto-saves on project switch)
+      const result = await loadConfig();
+      if (result.ok) {
+        setRepository(result.value.github.repository);
+      } else {
+        logSystem('warn', 'Failed to reload config', { code: result.error.code });
+      }
+      await refresh();
     }
+  };
+
+  const handleProjectSelected = async () => {
+    clearConfigCache();
+
+    // Refresh project selector to get updated settings
+    await projectSelector.refresh();
+
+    // Load repository from global config (auto-saved by project service)
+    if (!isMock) {
+      const result = await loadConfig();
+      if (result.ok) {
+        setRepository(result.value.github.repository);
+      } else {
+        logSystem('warn', 'Failed to load config after project selection', { code: result.error.code });
+      }
+      await refresh();
+    }
+
+    setShowProjectSelector(false);
   };
 
   return (
@@ -244,6 +309,13 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onConfigChange={handleConfigChange}
+      />
+      <ProjectSelectorDialog
+        isOpen={showProjectSelector}
+        projectSelector={projectSelector}
+        onProjectSelected={handleProjectSelected}
+        onClose={() => setShowProjectSelector(false)}
+        allowClose={projectSelector.hasProject}
       />
     </NotificationProvider>
   );

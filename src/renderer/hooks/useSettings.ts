@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { getCachedConfig, getCurrentRepoRoot, clearConfigCache } from "@services/config";
+import { getCachedConfig, getCurrentRepoRoot, clearConfigCache, getConfigLocation, revealConfigInFinder } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import {
   hasDevcontainerConfig,
@@ -18,6 +18,7 @@ import type { DockerRuntimeStatus } from "@services/dockerRuntime";
 interface SettingsState {
   // Config
   repository: string | null;
+  configLocation: string | null;
   // Git
   isGitRepo: boolean | null;
   repoRoot: string | null;
@@ -37,6 +38,7 @@ interface SettingsState {
 export function useSettings() {
   const [state, setState] = useState<SettingsState>({
     repository: null,
+    configLocation: null,
     isGitRepo: null,
     repoRoot: null,
     isGitHubAuthenticated: null,
@@ -50,11 +52,14 @@ export function useSettings() {
   });
 
   const checkConfig = useCallback(async () => {
-    const result = await getCachedConfig();
+    const [result, location] = await Promise.all([
+      getCachedConfig(),
+      getConfigLocation(),
+    ]);
     if (result.ok) {
-      setState((prev) => ({ ...prev, repository: result.value.github.repository }));
+      setState((prev) => ({ ...prev, repository: result.value.github.repository, configLocation: location }));
     } else {
-      setState((prev) => ({ ...prev, repository: null }));
+      setState((prev) => ({ ...prev, repository: null, configLocation: location }));
     }
   }, []);
 
@@ -153,6 +158,10 @@ export function useSettings() {
     await checkDevcontainer();
   }, [checkDevcontainer]);
 
+  const revealConfig = useCallback(async () => {
+    await revealConfigInFinder();
+  }, []);
+
   // Subscribe to Docker status changes
   useEffect(() => {
     const unsubscribe = onDockerRuntimeStatusChange((status) => {
@@ -170,5 +179,6 @@ export function useSettings() {
     ...state,
     refresh,
     saveDevcontainerConfig,
+    revealConfig,
   };
 }

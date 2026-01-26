@@ -12,6 +12,7 @@ import { DevcontainerEditorSection } from "./DevcontainerEditorSection";
 import { GitHubRepoSection } from "./GitHubRepoSection";
 import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
+import { ProjectSection } from "./ProjectSection";
 import { useSettings } from "../../hooks/useSettings";
 
 export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanelProps) {
@@ -84,12 +85,31 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
 
         {/* Content */}
         <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* Project Group */}
+          <SettingsGroup title="Project">
+            <ProjectSection onProjectChange={handleConfigChange} />
+          </SettingsGroup>
+
           {/* GitHub Group */}
           <SettingsGroup title="GitHub">
             <GitHubRepoSection
               currentRepo={settings.repository}
               onSave={handleConfigChange}
             />
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900">Config Location</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Settings stored in app data directory</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={settings.revealConfig}>
+                  Reveal in Finder
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 font-mono mt-2 truncate" title={settings.configLocation ?? undefined}>
+                {settings.configLocation ? settings.configLocation.replace(/^\/Users\/[^/]+/, "~") : "Loading..."}
+              </p>
+            </div>
             <GitHubAuthSection
               isAuthenticated={settings.isGitHubAuthenticated}
               username={settings.gitHubUsername}

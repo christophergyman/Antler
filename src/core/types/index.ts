@@ -8,3 +8,4 @@ export * from "./card";
 export * from "./result";
 export * from "./log";
 export * from "./notification";
+export * from "./project";

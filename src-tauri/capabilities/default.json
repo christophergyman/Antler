@@ -43,6 +43,18 @@
           "cmd": "colima",
           "args": true,
           "sidecar": false
+        },
+        {
+          "name": "run-open",
+          "cmd": "open",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-osascript",
+          "cmd": "osascript",
+          "args": true,
+          "sidecar": false
         }
       ]
     },
@@ -84,6 +96,18 @@
           "cmd": "colima",
           "args": true,
           "sidecar": false
+        },
+        {
+          "name": "run-open",
+          "cmd": "open",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "run-osascript",
+          "cmd": "osascript",
+          "args": true,
+          "sidecar": false
         }
       ]
     },
@@ -108,6 +132,7 @@
       "allow": [{ "path": "/**" }]
     },
     "core:path:default",
-    "os:default"
+    "os:default",
+    "dialog:allow-open"
   ]
 }

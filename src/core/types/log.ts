@@ -18,7 +18,8 @@ export type LogCategory =
   | "worktree"
   | "devcontainer"
   | "docker"
-  | "prerequisites";
+  | "prerequisites"
+  | "project";
 
 // ============================================================================
 // User Action Types
