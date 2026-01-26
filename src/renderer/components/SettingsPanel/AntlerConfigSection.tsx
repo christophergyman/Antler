@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { load } from "js-yaml";
 import { Button } from "../ui/button";
 import type { StatusIndicator } from "./types";
+import { logConfig } from "@services/logging";
 
 interface AntlerConfigSectionProps {
   hasConfig: boolean | null;
@@ -96,8 +97,9 @@ export function AntlerConfigSection({
       await onSave(editorContent);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
-    } catch {
-      // Error handling is done by parent
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      logConfig("error", "Failed to save config from editor", { error: message });
     } finally {
       setIsSaving(false);
     }

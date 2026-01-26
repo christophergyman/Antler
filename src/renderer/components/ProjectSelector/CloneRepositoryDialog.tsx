@@ -12,6 +12,8 @@ interface CloneRepositoryDialogProps {
   onClose: () => void;
   onCloneAndSelect: (repoUrl: string, parentDir?: string) => Promise<boolean>;
   onComplete: () => void;
+  /** Error message from parent (e.g., clone failure details) */
+  externalError?: string | null;
 }
 
 export function CloneRepositoryDialog({
@@ -19,11 +21,15 @@ export function CloneRepositoryDialog({
   onClose,
   onCloneAndSelect,
   onComplete,
+  externalError,
 }: CloneRepositoryDialogProps) {
   const [repoUrl, setRepoUrl] = useState("");
   const [destination, setDestination] = useState("");
   const [isCloning, setIsCloning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  // Use external error (from hook) if available, otherwise use local validation error
+  const error = externalError || localError;
 
   // Handle Escape key - inline handler to prevent re-registration on every render
   useEffect(() => {
@@ -44,7 +50,7 @@ export function CloneRepositoryDialog({
     if (isOpen) {
       setRepoUrl("");
       setDestination("");
-      setError(null);
+      setLocalError(null);
     }
   }, [isOpen]);
 
@@ -61,17 +67,17 @@ export function CloneRepositoryDialog({
 
   const handleClone = async () => {
     if (!repoUrl.trim()) {
-      setError("Please enter a repository URL or owner/repo");
+      setLocalError("Please enter a repository URL or owner/repo");
       return;
     }
 
     if (!destination.trim()) {
-      setError("Please select a destination folder");
+      setLocalError("Please select a destination folder");
       return;
     }
 
     setIsCloning(true);
-    setError(null);
+    setLocalError(null);
 
     const success = await onCloneAndSelect(repoUrl.trim(), destination);
 
@@ -79,9 +85,8 @@ export function CloneRepositoryDialog({
 
     if (success) {
       onComplete();
-    } else {
-      setError("Failed to clone repository. Please check the URL and try again.");
     }
+    // Error is now handled via externalError prop from parent hook
   };
 
   const handleSubmit = (e: React.FormEvent) => {

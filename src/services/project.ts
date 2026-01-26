@@ -21,6 +21,41 @@ const SETTINGS_FILENAME = "project-settings.json";
 const MAX_RECENT_PROJECTS = 5;
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+/**
+ * Validate project settings structure
+ * Returns the validated settings or null if invalid
+ */
+function validateProjectSettings(data: unknown): ProjectSettings | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  // currentProject must be null or a string
+  if (obj.currentProject !== null && typeof obj.currentProject !== "string") {
+    return null;
+  }
+
+  // recentProjects must be an array of strings
+  if (!Array.isArray(obj.recentProjects)) {
+    return null;
+  }
+
+  if (!obj.recentProjects.every((item: unknown) => typeof item === "string")) {
+    return null;
+  }
+
+  return {
+    currentProject: obj.currentProject as string | null,
+    recentProjects: obj.recentProjects as string[],
+  };
+}
+
+// ============================================================================
 // Project Settings Persistence
 // ============================================================================
 
@@ -49,12 +84,18 @@ export async function loadProjectSettings(): Promise<ProjectResult<ProjectSettin
     }
 
     const content = await readTextFile(SETTINGS_FILENAME, { baseDir: BaseDirectory.AppData });
-    const parsed = JSON.parse(content) as ProjectSettings;
+    const parsed = JSON.parse(content) as unknown;
+    const validated = validateProjectSettings(parsed);
 
-    logProject("debug", "Project settings loaded", { currentProject: parsed.currentProject });
+    if (!validated) {
+      logProject("warn", "Invalid project settings format, using defaults");
+      return ok(createDefaultSettings());
+    }
+
+    logProject("debug", "Project settings loaded", { currentProject: validated.currentProject });
     return ok(Object.freeze({
-      currentProject: parsed.currentProject ?? null,
-      recentProjects: Object.freeze(parsed.recentProjects ?? []),
+      currentProject: validated.currentProject ?? null,
+      recentProjects: Object.freeze(validated.recentProjects ?? []),
     }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

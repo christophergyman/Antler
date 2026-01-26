@@ -64,8 +64,9 @@ export function ProjectSelectorDialog({
     }
   };
 
-  const handleRemoveRecent = async (event: React.MouseEvent, path: string) => {
+  const handleRemoveRecent = async (event: React.SyntheticEvent, path: string) => {
     event.stopPropagation();
+    event.preventDefault();
     await removeRecent(path);
   };
 
@@ -221,11 +222,10 @@ export function ProjectSelectorDialog({
                           onClick={(e) => handleRemoveRecent(e, path)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleRemoveRecent(e as unknown as React.MouseEvent, path);
+                              handleRemoveRecent(e, path);
                             }
                           }}
-                          className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          className="p-1 text-gray-300 hover:text-red-500 focus:text-red-500 focus:outline-none transition-colors cursor-pointer"
                           aria-label={`Remove ${name} from recent projects`}
                         >
                           <svg
@@ -259,6 +259,7 @@ export function ProjectSelectorDialog({
         onClose={() => setShowCloneDialog(false)}
         onCloneAndSelect={cloneAndSelect}
         onComplete={handleCloneComplete}
+        externalError={showCloneDialog ? error : null}
       />
     </>
   );
