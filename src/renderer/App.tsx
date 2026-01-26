@@ -258,6 +258,7 @@ export default function App() {
   const handleConfigChange = async () => {
     clearConfigCache();
     if (!isMock) {
+      setCards([]);  // Clear old cards before loading new project
       // Reload from global config (project service auto-saves on project switch)
       const result = await loadConfig();
       if (result.ok) {
@@ -265,12 +266,13 @@ export default function App() {
       } else {
         logSystem('warn', 'Failed to reload config', { code: result.error.code });
       }
-      await refresh();
+      await refresh(true);
     }
   };
 
   const handleProjectSelected = async () => {
     clearConfigCache();
+    setCards([]);  // Clear old cards before loading new project
 
     // Refresh project selector to get updated settings
     await projectSelector.refresh();
@@ -283,7 +285,7 @@ export default function App() {
       } else {
         logSystem('warn', 'Failed to load config after project selection', { code: result.error.code });
       }
-      await refresh();
+      await refresh(true);
     }
 
     setShowProjectSelector(false);

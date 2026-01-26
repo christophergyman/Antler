@@ -19,7 +19,7 @@ interface UseCardsReturn {
   isRefreshing: boolean;
   error: string | null;
   errorCode: string | null;
-  refresh: () => Promise<void>;
+  refresh: (clearExisting?: boolean) => Promise<void>;
 }
 
 type FetchError = ConfigError | GitHubError;
@@ -39,7 +39,7 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasFetched = useRef(false);
 
-  const fetchCards = useCallback(async () => {
+  const fetchCards = useCallback(async (clearExisting = false) => {
     const isInitial = !hasFetched.current;
     const startTime = Date.now();
 
@@ -84,8 +84,9 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
         return;
       }
 
-      // Sync cards with fetched issues
-      const syncResult = syncCards(cards, issuesResult.value);
+      // Sync cards with fetched issues (use empty array when clearing to avoid stale closure)
+      const currentCards = clearExisting ? [] : cards;
+      const syncResult = syncCards(currentCards, issuesResult.value);
       setCards(syncResult.cards);
 
       logDataSync('info', 'Sync completed', {
