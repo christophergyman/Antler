@@ -3,11 +3,11 @@
  * Verifies required tools are installed and running
  */
 
-import { Command } from "@tauri-apps/plugin-shell";
 import type { PrerequisiteResult } from "@core/types/result";
 import { ok, err, createPrerequisiteError } from "@core/types/result";
 import { checkDevcontainerCli, checkDockerRunning } from "./devcontainer";
 import { logPrerequisites } from "./logging";
+import { executeGit } from "./commandExecutor";
 
 // ============================================================================
 // Individual Checks
@@ -19,15 +19,15 @@ import { logPrerequisites } from "./logging";
 async function checkGit(): Promise<PrerequisiteResult<void>> {
   logPrerequisites("debug", "Checking git installation");
 
-  try {
-    const command = Command.create("run-git", ["--version"]);
-    const output = await command.execute();
+  const result = await executeGit(["--version"]);
 
-    if (output.code === 0) {
-      logPrerequisites("debug", "Git found", { version: output.stdout.trim() });
-      return ok(undefined);
-    }
+  if (result.ok && result.value.exitCode === 0) {
+    logPrerequisites("debug", "Git found", { version: result.value.stdout.trim() });
+    return ok(undefined);
+  }
 
+  // Check error type from CommandExecutor
+  if (!result.ok && result.error.type === "not_installed") {
     return err(
       createPrerequisiteError(
         "git_not_installed",
@@ -35,27 +35,17 @@ async function checkGit(): Promise<PrerequisiteResult<void>> {
         "Install git from https://git-scm.com"
       )
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (message.includes("ENOENT") || message.includes("not found")) {
-      return err(
-        createPrerequisiteError(
-          "git_not_installed",
-          "Git is not installed",
-          "Install git from https://git-scm.com"
-        )
-      );
-    }
-
-    return err(
-      createPrerequisiteError(
-        "git_not_installed",
-        "Failed to check git installation",
-        message
-      )
-    );
   }
+
+  // Generic failure
+  const details = result.ok ? result.value.stderr : (result.error.details ?? result.error.message);
+  return err(
+    createPrerequisiteError(
+      "git_not_installed",
+      "Failed to check git installation",
+      details
+    )
+  );
 }
 
 // ============================================================================

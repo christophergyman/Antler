@@ -3,7 +3,7 @@
  * JSON editor for devcontainer.json with template presets
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "../ui/button";
 import {
   Select,
@@ -47,7 +47,20 @@ export function DevcontainerEditorSection({
   const [editorContent, setEditorContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+
+  // Refs for timeout cleanup to prevent memory leaks
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    };
+  }, []);
 
   // Initialize editor content from config
   useEffect(() => {
@@ -92,13 +105,20 @@ export function DevcontainerEditorSection({
 
     setIsSaving(true);
     setSaveSuccess(false);
+    setSaveError(null);
 
     try {
       await onSave(editorContent);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-    } catch {
-      // Error handling is done by parent
+      // Clear any existing timeout before setting new one
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save configuration";
+      setSaveError(message);
+      // Auto-clear error after 5 seconds
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setSaveError(null), 5000);
     } finally {
       setIsSaving(false);
     }
@@ -176,6 +196,13 @@ export function DevcontainerEditorSection({
           spellCheck={false}
         />
       </div>
+
+      {/* Error display */}
+      {saveError && (
+        <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700" role="alert">
+          {saveError}
+        </div>
+      )}
 
       {/* Footer with validation and save */}
       <div className="flex items-center justify-between">

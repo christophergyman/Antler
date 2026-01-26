@@ -39,6 +39,11 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasFetched = useRef(false);
 
+  // Use a ref to access current cards without creating a dependency
+  // This prevents the infinite loop where fetchCards -> cards change -> fetchCards recreated
+  const cardsRef = useRef<Card[]>(cards);
+  cardsRef.current = cards;
+
   const fetchCards = useCallback(async (clearExisting = false) => {
     const isInitial = !hasFetched.current;
     const startTime = Date.now();
@@ -84,8 +89,9 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
         return;
       }
 
-      // Sync cards with fetched issues (use empty array when clearing to avoid stale closure)
-      const currentCards = clearExisting ? [] : cards;
+      // Sync cards with fetched issues
+      // Use ref to get current cards without dependency, or empty array when clearing
+      const currentCards = clearExisting ? [] : cardsRef.current;
       const syncResult = syncCards(currentCards, issuesResult.value);
       setCards(syncResult.cards);
 
@@ -105,7 +111,7 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [cards, dataSource]);
+  }, [dataSource]); // Removed cards dependency - using ref instead
 
   useEffect(() => {
     fetchCards();

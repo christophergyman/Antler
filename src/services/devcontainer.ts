@@ -8,6 +8,7 @@ import { exists, readTextFile, writeTextFile, mkdir } from "@tauri-apps/plugin-f
 import type { DevcontainerResult } from "@core/types/result";
 import { ok, err, createDevcontainerError } from "@core/types/result";
 import { logDevcontainer } from "./logging";
+import { executeDocker, executeDevcontainer, type CommandResult } from "./commandExecutor";
 
 // ============================================================================
 // Constants
@@ -35,43 +36,34 @@ const CONFIG_PATHS = ["devcontainer.json", ".devcontainer/devcontainer.json"];
 export async function checkDevcontainerCli(): Promise<DevcontainerResult<void>> {
   logDevcontainer("debug", "Checking devcontainer CLI installation");
 
-  try {
-    const command = Command.create("run-devcontainer", ["--version"]);
-    const output = await command.execute();
+  const result = await executeDevcontainer(["--version"]);
 
-    if (output.code === 0) {
-      logDevcontainer("debug", "Devcontainer CLI found", { version: output.stdout.trim() });
-      return ok(undefined);
-    }
+  if (result.ok && result.value.exitCode === 0) {
+    logDevcontainer("debug", "Devcontainer CLI found", { version: result.value.stdout.trim() });
+    return ok(undefined);
+  }
 
+  const errorDetails = result.ok ? result.value.stderr : result.error.details;
+  const isNotInstalled = errorDetails?.includes("ENOENT") || errorDetails?.includes("not found") ||
+    (result.ok === false && result.error.type === "not_installed");
+
+  if (isNotInstalled) {
     return err(
       createDevcontainerError(
         "devcontainer_not_installed",
-        "Devcontainer CLI not found",
+        "Devcontainer CLI is not installed",
         "Install with: npm install -g @devcontainers/cli"
       )
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (message.includes("ENOENT") || message.includes("not found")) {
-      return err(
-        createDevcontainerError(
-          "devcontainer_not_installed",
-          "Devcontainer CLI is not installed",
-          "Install with: npm install -g @devcontainers/cli"
-        )
-      );
-    }
-
-    return err(
-      createDevcontainerError(
-        "devcontainer_not_installed",
-        "Failed to check devcontainer CLI",
-        message
-      )
-    );
   }
+
+  return err(
+    createDevcontainerError(
+      "devcontainer_not_installed",
+      "Failed to check devcontainer CLI",
+      errorDetails ?? "Unknown error"
+    )
+  );
 }
 
 /**
@@ -80,53 +72,44 @@ export async function checkDevcontainerCli(): Promise<DevcontainerResult<void>> 
 export async function checkDockerRunning(): Promise<DevcontainerResult<void>> {
   logDevcontainer("debug", "Checking Docker daemon");
 
-  try {
-    const command = Command.create("run-docker", ["info"]);
-    const output = await command.execute();
+  const result = await executeDocker(["info"]);
 
-    if (output.code === 0) {
-      logDevcontainer("debug", "Docker daemon is running");
-      return ok(undefined);
-    }
+  if (result.ok && result.value.exitCode === 0) {
+    logDevcontainer("debug", "Docker daemon is running");
+    return ok(undefined);
+  }
 
-    if (output.stderr.includes("Cannot connect") || output.stderr.includes("Is the docker daemon running")) {
-      return err(
-        createDevcontainerError(
-          "docker_not_running",
-          "Docker daemon is not running",
-          "Start Docker Desktop or the Docker daemon"
-        )
-      );
-    }
+  const stderr = result.ok ? result.value.stderr : (result.error.details ?? "");
+  const isNotInstalled = stderr.includes("ENOENT") || stderr.includes("not found") ||
+    (result.ok === false && result.error.type === "not_installed");
 
+  if (isNotInstalled) {
     return err(
       createDevcontainerError(
         "docker_not_running",
-        "Docker check failed",
-        output.stderr.trim()
-      )
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (message.includes("ENOENT") || message.includes("not found")) {
-      return err(
-        createDevcontainerError(
-          "docker_not_running",
-          "Docker is not installed",
-          "Install Docker from https://docker.com"
-        )
-      );
-    }
-
-    return err(
-      createDevcontainerError(
-        "docker_not_running",
-        "Failed to check Docker status",
-        message
+        "Docker is not installed",
+        "Install Docker from https://docker.com"
       )
     );
   }
+
+  if (stderr.includes("Cannot connect") || stderr.includes("Is the docker daemon running")) {
+    return err(
+      createDevcontainerError(
+        "docker_not_running",
+        "Docker daemon is not running",
+        "Start Docker Desktop or the Docker daemon"
+      )
+    );
+  }
+
+  return err(
+    createDevcontainerError(
+      "docker_not_running",
+      "Docker check failed",
+      stderr.trim() || "Unknown error"
+    )
+  );
 }
 
 // ============================================================================
@@ -258,41 +241,34 @@ export async function saveDevcontainerConfig(
 export async function getUsedPorts(): Promise<DevcontainerResult<Set<number>>> {
   logDevcontainer("debug", "Getting used Docker ports");
 
-  try {
-    const command = Command.create("run-docker", ["ps", "--format", "{{.Ports}}"]);
-    const output = await command.execute();
+  const result = await executeDocker(["ps", "--format", "{{.Ports}}"]);
 
-    if (output.code !== 0) {
-      logDevcontainer("warn", "Failed to get Docker ports", { stderr: output.stderr });
-      // Return empty set on failure - we'll try to use ports anyway
-      return ok(new Set<number>());
-    }
+  if (!result.ok || result.value.exitCode !== 0) {
+    const errorDetails = result.ok ? result.value.stderr : (result.error.details ?? "Unknown error");
+    logDevcontainer("warn", "Failed to get Docker ports", { error: errorDetails });
+    // Return empty set on failure - we'll try to use ports anyway
+    return ok(new Set<number>());
+  }
 
-    const usedPorts = new Set<number>();
-    const lines = output.stdout.split("\n");
+  const usedPorts = new Set<number>();
+  const lines = result.value.stdout.split("\n");
 
-    for (const line of lines) {
-      // Parse port mappings like "0.0.0.0:3000->3000/tcp" or "3000/tcp"
-      const matches = line.matchAll(/(?:[\d.]+:)?(\d+)(?:->|\/)/g);
-      for (const match of matches) {
-        const portStr = match[1];
-        if (portStr) {
-          const port = parseInt(portStr, 10);
-          if (!isNaN(port)) {
-            usedPorts.add(port);
-          }
+  for (const line of lines) {
+    // Parse port mappings like "0.0.0.0:3000->3000/tcp" or "3000/tcp"
+    const matches = line.matchAll(/(?:[\d.]+:)?(\d+)(?:->|\/)/g);
+    for (const match of matches) {
+      const portStr = match[1];
+      if (portStr) {
+        const port = parseInt(portStr, 10);
+        if (!isNaN(port) && port >= 1 && port <= 65535) {
+          usedPorts.add(port);
         }
       }
     }
-
-    logDevcontainer("debug", "Found used ports", { count: usedPorts.size, ports: Array.from(usedPorts) });
-    return ok(usedPorts);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logDevcontainer("warn", "Failed to get used ports", { error: message });
-    // Return empty set on error - we'll try to use ports anyway
-    return ok(new Set<number>());
   }
+
+  logDevcontainer("debug", "Found used ports", { count: usedPorts.size, ports: Array.from(usedPorts) });
+  return ok(usedPorts);
 }
 
 /**
@@ -359,20 +335,27 @@ export async function startDevcontainer(
     );
   }
 
+  const command = Command.create("run-devcontainer", [
+    "up",
+    "--workspace-folder",
+    workspacePath,
+    "--remote-env",
+    `PORT=${port}`,
+  ]);
+
+  let stdout = "";
+  let stderr = "";
+  let timedOut = false;
+  let child: Awaited<ReturnType<typeof command.spawn>> | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  // Handle abort signal
+  const abortHandler = () => {
+    logDevcontainer("info", "Aborting devcontainer start");
+    child?.kill();
+  };
+
   try {
-    const command = Command.create("run-devcontainer", [
-      "up",
-      "--workspace-folder",
-      workspacePath,
-      "--remote-env",
-      `PORT=${port}`,
-    ]);
-
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let child: Awaited<ReturnType<typeof command.spawn>> | null = null;
-
     command.stdout.on("data", (data) => {
       stdout += data;
     });
@@ -387,21 +370,14 @@ export async function startDevcontainer(
 
     child = await command.spawn();
 
-    // Handle abort signal
-    const abortHandler = () => {
-      logDevcontainer("info", "Aborting devcontainer start");
-      child?.kill();
-    };
     signal?.addEventListener("abort", abortHandler);
 
-    const timeoutId = setTimeout(() => {
+    timeoutId = setTimeout(() => {
       timedOut = true;
       child?.kill();
     }, DEFAULT_TIMEOUT_MS);
 
     const status = await exitPromise;
-    clearTimeout(timeoutId);
-    signal?.removeEventListener("abort", abortHandler);
 
     if (signal?.aborted) {
       return err(createDevcontainerError("devcontainer_start_failed", "Operation cancelled"));
@@ -453,12 +429,27 @@ export async function startDevcontainer(
         message
       )
     );
+  } finally {
+    // Ensure cleanup of timeout and abort handler
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+    signal?.removeEventListener("abort", abortHandler);
+    // Kill child process if still running (belt and suspenders)
+    try {
+      child?.kill();
+    } catch {
+      // Process may already be dead
+    }
   }
 }
 
 /**
  * Stop a devcontainer for the given workspace
  * Uses docker commands to stop containers associated with the workspace
+ *
+ * Stops all containers in parallel using Promise.allSettled to ensure
+ * all containers are attempted even if some fail.
  */
 export async function stopDevcontainer(
   workspacePath: string
@@ -467,27 +458,82 @@ export async function stopDevcontainer(
 
   try {
     // List containers with the workspace label
-    const listCommand = Command.create("run-docker", [
+    const listResult = await executeDocker([
       "ps",
       "-q",
       "--filter",
       `label=devcontainer.local_folder=${workspacePath}`,
     ]);
 
-    const listOutput = await listCommand.execute();
+    // Handle command execution failure
+    if (!listResult.ok) {
+      logDevcontainer("warn", "Failed to list containers", { error: listResult.error.message });
+      // Return success - no containers to stop if we can't list them
+      return ok(undefined);
+    }
 
-    if (listOutput.code !== 0 || !listOutput.stdout.trim()) {
+    if (listResult.value.exitCode !== 0 || !listResult.value.stdout.trim()) {
       // No containers found - that's okay
       logDevcontainer("debug", "No devcontainer found to stop", { workspacePath });
       return ok(undefined);
     }
 
-    const containerIds = listOutput.stdout.trim().split("\n").filter(Boolean);
+    const containerIds = listResult.value.stdout.trim().split("\n").filter(Boolean);
 
-    for (const containerId of containerIds) {
+    // Stop all containers in parallel, collecting results
+    const stopPromises = containerIds.map(async (containerId) => {
       logDevcontainer("debug", "Stopping container", { containerId });
-      const stopCommand = Command.create("run-docker", ["stop", containerId]);
-      await stopCommand.execute();
+      const result = await executeDocker(["stop", containerId]);
+      return { containerId, result };
+    });
+
+    const results = await Promise.allSettled(stopPromises);
+
+    // Collect failures
+    const failures: string[] = [];
+    for (const result of results) {
+      if (result.status === "rejected") {
+        const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        failures.push(reason);
+        logDevcontainer("warn", "Container stop promise rejected", { error: reason });
+      } else if (!result.value.result.ok) {
+        // executeDocker returned an error
+        const errorMsg = result.value.result.error.message;
+        failures.push(`Container ${result.value.containerId}: ${errorMsg}`);
+        logDevcontainer("warn", "Container stop failed", {
+          containerId: result.value.containerId,
+          error: errorMsg,
+        });
+      } else if (result.value.result.value.exitCode !== 0) {
+        const stderr = result.value.result.value.stderr.trim();
+        failures.push(`Container ${result.value.containerId}: ${stderr}`);
+        logDevcontainer("warn", "Container stop failed", {
+          containerId: result.value.containerId,
+          exitCode: result.value.result.value.exitCode,
+          stderr,
+        });
+      }
+    }
+
+    // Report partial failures but still return success if at least some stopped
+    if (failures.length > 0 && failures.length === containerIds.length) {
+      // All containers failed to stop
+      logDevcontainer("error", "All containers failed to stop", { failures });
+      return err(
+        createDevcontainerError(
+          "devcontainer_stop_failed",
+          "Failed to stop all containers",
+          failures.join("; ")
+        )
+      );
+    } else if (failures.length > 0) {
+      // Some containers failed, but others succeeded - log warning and continue
+      logDevcontainer("warn", "Some containers failed to stop", {
+        workspacePath,
+        failedCount: failures.length,
+        totalCount: containerIds.length,
+        failures,
+      });
     }
 
     logDevcontainer("info", "Devcontainer stopped successfully", { workspacePath });

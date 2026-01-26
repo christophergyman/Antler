@@ -3,13 +3,13 @@
  * Fetches issues and PRs via the `gh` CLI using Tauri shell plugin
  */
 
-import { Command } from "@tauri-apps/plugin-shell";
 import type { GitHubResult } from "@core/types/result";
 import { ok, err, createGitHubError } from "@core/types/result";
 import type { GitHubInfo, GitHubComment, GitHubPR } from "@core/types/github";
 import { createGitHubInfo, createGitHubComment, createGitHubPR } from "@core/types/github";
 import { createCIStatus } from "@core/types/ci";
 import { logDataSync } from "./logging";
+import { executeGh } from "./commandExecutor";
 
 // ============================================================================
 // Constants
@@ -23,6 +23,9 @@ const DEFAULT_TIMEOUT_MS = 30000;
 
 /** Number of concurrent PR fetches */
 const PR_CONCURRENCY = 5;
+
+/** Number of retries for network operations */
+const DEFAULT_RETRIES = 2;
 
 // ============================================================================
 // Raw Types (from gh CLI JSON output)
@@ -79,120 +82,79 @@ interface RawPR {
 // Command Execution
 // ============================================================================
 
-async function execGh(args: string[], timeoutMs = DEFAULT_TIMEOUT_MS): Promise<GitHubResult<string>> {
+/**
+ * Map CommandError to GitHubError with GitHub-specific error codes
+ * Handles authentication errors from gh CLI stderr when command execution fails
+ */
+function mapCommandErrorToGitHubError(
+  errorType: string,
+  message: string,
+  details?: string
+): ReturnType<typeof createGitHubError> {
+  // Check for GitHub-specific authentication errors in the details
+  if (details) {
+    if (details.includes("not logged in") || details.includes("auth login")) {
+      return createGitHubError(
+        "not_authenticated",
+        "Not logged in to GitHub",
+        "Run `gh auth login` to authenticate"
+      );
+    }
+
+    // Handle repository not found (GitHub-specific, not network error)
+    if (details.includes("Could not resolve") && details.includes("repository")) {
+      return createGitHubError(
+        "repo_not_found",
+        "Repository not found or inaccessible",
+        details
+      );
+    }
+  }
+
+  // Map standard error types
+  switch (errorType) {
+    case "cancelled":
+      return createGitHubError("command_failed", "Operation cancelled");
+    case "not_installed":
+      return createGitHubError(
+        "gh_not_installed",
+        "GitHub CLI not installed",
+        "Install from https://cli.github.com"
+      );
+    case "network_error":
+      return createGitHubError("network_error", message, details);
+    case "timeout":
+      return createGitHubError("command_failed", "Command timed out", details);
+    default:
+      return createGitHubError("command_failed", message, details);
+  }
+}
+
+/**
+ * Execute a gh command with retry support
+ */
+async function execGh(
+  args: string[],
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  retries = DEFAULT_RETRIES
+): Promise<GitHubResult<string>> {
   const commandPreview = `gh ${args.slice(0, 4).join(" ")}${args.length > 4 ? "..." : ""}`;
   logDataSync("debug", `Executing: ${commandPreview}`);
 
-  try {
-    const command = Command.create("run-gh", args);
+  const result = await executeGh(args, { timeoutMs, retries });
 
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let child: Awaited<ReturnType<typeof command.spawn>> | null = null;
-
-    // Set up listeners BEFORE spawning (Tauri v2 API)
-    command.stdout.on("data", (data) => {
-      stdout += data;
-    });
-    command.stderr.on("data", (data) => {
-      stderr += data;
-    });
-
-    // Wait for process to exit
-    const exitPromise = new Promise<number | null>((resolve) => {
-      command.on("close", (data) => resolve(data.code));
-      command.on("error", () => resolve(null));
-    });
-
-    // Spawn the process
-    child = await command.spawn();
-
-    // Set up timeout to kill the process
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      child?.kill();
-    }, timeoutMs);
-
-    const status = await exitPromise;
-
-    // Clear timeout if command completed
-    clearTimeout(timeoutId);
-
-    // Handle timeout case
-    if (timedOut) {
-      logDataSync("error", "Command timed out", { command: commandPreview, timeoutMs });
-      return err(
-        createGitHubError(
-          "command_failed",
-          "Command timed out",
-          `gh ${args.slice(0, 3).join(" ")}... exceeded ${timeoutMs}ms`
-        )
-      );
-    }
-
-    // Handle success
-    if (status === 0) {
-      logDataSync("debug", "Command succeeded", { command: commandPreview });
-      return ok(stdout);
-    }
-
-    // Handle errors
-    if (stderr.includes("not logged in") || stderr.includes("auth login")) {
-      logDataSync("error", "GitHub authentication required", { command: commandPreview });
-      return err(
-        createGitHubError(
-          "not_authenticated",
-          "Not logged in to GitHub",
-          "Run `gh auth login` to authenticate"
-        )
-      );
-    }
-
-    if (stderr.includes("Could not resolve") || stderr.includes("not found")) {
-      logDataSync("error", "Repository not found", { command: commandPreview });
-      return err(
-        createGitHubError(
-          "repo_not_found",
-          "Repository not found or inaccessible",
-          stderr.trim()
-        )
-      );
-    }
-
-    if (stderr.includes("connect") || stderr.includes("network")) {
-      logDataSync("error", "Network error", { command: commandPreview });
-      return err(createGitHubError("network_error", "Network error", stderr.trim()));
-    }
-
-    logDataSync("error", `Command failed with exit code ${status}`, { command: commandPreview, exitCode: status });
-    return err(
-      createGitHubError(
-        "command_failed",
-        `gh command failed with exit code ${status}`,
-        stderr.trim()
-      )
-    );
-  } catch (error) {
-    // Handle case where gh CLI is not installed
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (errorMessage.includes("ENOENT") || errorMessage.includes("not found")) {
-      logDataSync("error", "GitHub CLI not installed");
-      return err(
-        createGitHubError(
-          "gh_not_installed",
-          "GitHub CLI not installed",
-          "Install from https://cli.github.com"
-        )
-      );
-    }
-
-    logDataSync("error", "Failed to execute gh command", { error: errorMessage });
-    return err(
-      createGitHubError("command_failed", "Failed to execute gh command", errorMessage)
-    );
+  if (result.ok) {
+    // executeGh only returns ok when exitCode === 0
+    return ok(result.value.stdout);
   }
+
+  // Map CommandError to GitHubError with GitHub-specific handling
+  const error = result.error;
+  logDataSync("error", `Command failed: ${commandPreview}`, {
+    type: error.type,
+    message: error.message,
+  });
+  return err(mapCommandErrorToGitHubError(error.type, error.message, error.details));
 }
 
 // ============================================================================
@@ -486,11 +448,28 @@ export async function fetchIssuesWithPRs(
   const results: GitHubInfo[] = [];
 
   // Process in batches for controlled concurrency
+  // Use Promise.allSettled to handle partial failures gracefully
   for (let i = 0; i < issues.length; i += PR_CONCURRENCY) {
     const batch = issues.slice(i, i + PR_CONCURRENCY);
     const batchPromises = batch.map((issue) => fetchPRForIssue(repo, issue));
-    const batchResults = await Promise.all(batchPromises);
-    results.push(...batchResults);
+    const batchResults = await Promise.allSettled(batchPromises);
+
+    for (let j = 0; j < batchResults.length; j++) {
+      const result = batchResults[j];
+      if (result && result.status === "fulfilled") {
+        results.push(result.value);
+      } else if (result && result.status === "rejected") {
+        // On rejection, use the original issue without PR data
+        const originalIssue = batch[j];
+        if (originalIssue) {
+          logDataSync("warn", "Failed to fetch PR for issue, using issue without PR", {
+            issueNumber: originalIssue.issueNumber,
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          });
+          results.push(originalIssue);
+        }
+      }
+    }
   }
 
   return ok(results);
