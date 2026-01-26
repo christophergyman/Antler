@@ -36,11 +36,30 @@ bun run test:e2e:debug        # interactive debug
 
 ## Configuration
 
-The app requires an `antler.yaml` file in the project root (use `antler.example.yaml` as template):
+Antler stores its configuration in the platform-specific app data directory:
+
+| Platform | Location |
+|----------|----------|
+| **macOS** | `~/Library/Application Support/com.antler.app/antler.yaml` |
+| **Windows** | `%APPDATA%/com.antler.app/antler.yaml` |
+| **Linux** | `~/.config/com.antler.app/antler.yaml` |
+
+### Settings Panel (Recommended)
+
+Users can configure Antler via the in-app Settings panel (gear icon). Settings are automatically saved to the config file.
+
+### Manual Configuration
+
+Create/edit the config file directly. See `antler.example.yaml` for the full schema:
 
 ```yaml
 github:
   repository: owner/repo-name
+
+# Optional: Terminal settings for opening worktrees
+terminal:
+  app: iTerm           # App name or full path
+  postOpenCommand: bun run dev  # Command to run after opening
 ```
 
 The user must also be authenticated with GitHub CLI (`gh auth login`).

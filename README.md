@@ -52,11 +52,33 @@ bun install
 
 ## Configuration
 
-Create `antler.yaml` in the project root (use `antler.example.yaml` as a template):
+Antler stores its configuration in the platform-specific app data directory:
+
+| Platform | Location |
+|----------|----------|
+| **macOS** | `~/Library/Application Support/com.antler.app/antler.yaml` |
+| **Windows** | `%APPDATA%/com.antler.app/antler.yaml` |
+| **Linux** | `~/.config/com.antler.app/antler.yaml` |
+
+### Using the Settings Panel (Recommended)
+
+1. Launch Antler
+2. Click the **gear icon** to open Settings
+3. Configure the GitHub repository and terminal preferences
+4. Settings are automatically saved to the config file
+
+### Manual Configuration
+
+You can also create/edit the config file directly. See `antler.example.yaml` for the full schema:
 
 ```yaml
 github:
   repository: owner/repo-name
+
+# Optional: Terminal settings for opening worktrees
+terminal:
+  app: iTerm           # App name or full path
+  postOpenCommand: bun run dev  # Command to run after opening
 ```
 
 Make sure you're authenticated with GitHub CLI:
@@ -177,7 +199,7 @@ e2e/
 | `postcss.config.js` | PostCSS configuration |
 | `tsconfig.json` | TypeScript configuration with path aliases |
 | `e2e/playwright.config.ts` | Playwright E2E test configuration |
-| `antler.yaml` | Local config (create from `antler.example.yaml`) |
+| `antler.yaml` | User config (stored in app data directory, see Configuration section) |
 
 ## Key Patterns
 
