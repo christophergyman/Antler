@@ -665,3 +665,442 @@ export async function createMilestone(
 
   return ok(undefined);
 }
+
+// ============================================================================
+// Issue Creation
+// ============================================================================
+
+export interface CreateIssueParams {
+  title: string;
+  body?: string;
+  labels?: string[];
+  assignees?: string[];
+  milestone?: string;
+}
+
+/**
+ * Create a new GitHub issue
+ * Uses gh issue create command
+ */
+export async function createIssue(
+  repo: string,
+  params: CreateIssueParams
+): Promise<GitHubResult<GitHubInfo>> {
+  const args = [
+    "issue",
+    "create",
+    "--repo",
+    repo,
+    "--title",
+    params.title,
+  ];
+
+  if (params.body) {
+    args.push("--body", params.body);
+  }
+  if (params.labels && params.labels.length > 0) {
+    args.push("--label", params.labels.join(","));
+  }
+  if (params.assignees && params.assignees.length > 0) {
+    args.push("--assignee", params.assignees.join(","));
+  }
+  if (params.milestone) {
+    args.push("--milestone", params.milestone);
+  }
+
+  logDataSync("info", "Creating issue", { repo, title: params.title });
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  // gh issue create returns the URL of the new issue
+  // Extract issue number from URL (e.g., https://github.com/owner/repo/issues/123)
+  const url = result.value.trim();
+  const issueNumberMatch = url.match(/\/issues\/(\d+)$/);
+
+  if (!issueNumberMatch || !issueNumberMatch[1]) {
+    return err(
+      createGitHubError(
+        "parse_error",
+        "Failed to extract issue number from response",
+        url
+      )
+    );
+  }
+
+  const issueNumber = parseInt(issueNumberMatch[1], 10);
+  const parts = repo.split("/");
+  const owner = parts[0] ?? "";
+  const name = parts[1] ?? "";
+
+  // Return the new issue info
+  const githubInfo = createGitHubInfo({
+    repoOwner: owner,
+    repoName: name,
+    issueNumber,
+    title: params.title,
+    body: params.body ?? "",
+    state: "open",
+    labels: params.labels ?? [],
+    assignees: params.assignees ?? [],
+    milestone: params.milestone ?? null,
+    issueCreatedAt: new Date().toISOString(),
+    issueUpdatedAt: new Date().toISOString(),
+  });
+
+  logDataSync("info", "Issue created", { repo, issueNumber });
+
+  return ok(githubInfo);
+}
+
+// ============================================================================
+// Issue Templates
+// ============================================================================
+
+export interface IssueTemplate {
+  name: string;
+  about?: string;
+  body: string;
+  labels?: string[];
+}
+
+interface RawTemplateFile {
+  name: string;
+  path: string;
+  download_url: string;
+}
+
+/**
+ * Parse YAML frontmatter from a markdown template file (.md)
+ * Returns the parsed name, about, labels, and body content
+ */
+function parseMarkdownTemplate(content: string): {
+  name?: string;
+  about?: string;
+  labels?: string[];
+  body: string;
+} {
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+
+  if (!frontmatterMatch) {
+    // No frontmatter, entire content is the body
+    return { body: content };
+  }
+
+  const frontmatter = frontmatterMatch[1] ?? "";
+  const body = frontmatterMatch[2] ?? "";
+
+  // Simple YAML parsing for name, about, and labels
+  let name: string | undefined;
+  let about: string | undefined;
+  let labels: string[] | undefined;
+
+  // Parse name
+  const nameMatch = frontmatter.match(/^name:\s*["']?(.+?)["']?\s*$/m);
+  if (nameMatch?.[1]) {
+    name = nameMatch[1];
+  }
+
+  // Parse about
+  const aboutMatch = frontmatter.match(/^about:\s*["']?(.+?)["']?\s*$/m);
+  if (aboutMatch?.[1]) {
+    about = aboutMatch[1];
+  }
+
+  // Parse labels (can be array or comma-separated)
+  const labelsMatch = frontmatter.match(/^labels:\s*\[?(.+?)\]?\s*$/m);
+  if (labelsMatch?.[1]) {
+    labels = labelsMatch[1]
+      .split(",")
+      .map((l) => l.trim().replace(/^["']|["']$/g, ""))
+      .filter((l) => l.length > 0);
+  }
+
+  return { name, about, labels, body: body.trim() };
+}
+
+/**
+ * YAML form element types for issue templates
+ */
+interface YamlFormElement {
+  type: "markdown" | "input" | "textarea" | "dropdown" | "checkboxes";
+  id?: string;
+  attributes?: {
+    label?: string;
+    description?: string;
+    placeholder?: string;
+    value?: string;
+    options?: string[];
+  };
+}
+
+/**
+ * Parse a YAML issue form template (.yml/.yaml)
+ * Converts the body array of form elements into markdown
+ */
+function parseYamlTemplate(content: string): {
+  name?: string;
+  about?: string;
+  labels?: string[];
+  body: string;
+} {
+  // Parse top-level YAML fields using simple regex
+  let name: string | undefined;
+  let about: string | undefined;
+  let labels: string[] | undefined;
+
+  // Parse name
+  const nameMatch = content.match(/^name:\s*["']?(.+?)["']?\s*$/m);
+  if (nameMatch?.[1]) {
+    name = nameMatch[1];
+  }
+
+  // Parse description (maps to about)
+  const descMatch = content.match(/^description:\s*["']?(.+?)["']?\s*$/m);
+  if (descMatch?.[1]) {
+    about = descMatch[1];
+  }
+
+  // Parse labels (can be array on single line or multiline)
+  const labelsInlineMatch = content.match(/^labels:\s*\[(.+?)\]\s*$/m);
+  if (labelsInlineMatch?.[1]) {
+    labels = labelsInlineMatch[1]
+      .split(",")
+      .map((l) => l.trim().replace(/^["']|["']$/g, ""))
+      .filter((l) => l.length > 0);
+  } else {
+    // Try multiline array format
+    const labelsBlockMatch = content.match(/^labels:\s*\n((?:\s*-\s*.+\n?)+)/m);
+    if (labelsBlockMatch?.[1]) {
+      labels = labelsBlockMatch[1]
+        .split("\n")
+        .map((l) => l.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, ""))
+        .filter((l) => l.length > 0);
+    }
+  }
+
+  // Extract and convert body elements to markdown
+  const bodyContent = convertYamlBodyToMarkdown(content);
+
+  return { name, about, labels, body: bodyContent };
+}
+
+/**
+ * Convert YAML body array to markdown format
+ * Handles: markdown, input, textarea, dropdown, checkboxes
+ */
+function convertYamlBodyToMarkdown(yamlContent: string): string {
+  const markdownParts: string[] = [];
+
+  // Find the body section
+  const bodyMatch = yamlContent.match(/^body:\s*\n([\s\S]*?)(?=^[a-z]+:|$)/m);
+  if (!bodyMatch?.[1]) {
+    return "";
+  }
+
+  const bodySection = bodyMatch[1];
+
+  // Split body into individual elements (each starting with "  - type:")
+  const elementBlocks = bodySection.split(/(?=^\s*-\s*type:)/m).filter((b) => b.trim());
+
+  for (const block of elementBlocks) {
+    // Parse element type
+    const typeMatch = block.match(/^\s*-?\s*type:\s*["']?(\w+)["']?/);
+    if (!typeMatch?.[1]) continue;
+
+    const type = typeMatch[1];
+
+    // Parse attributes
+    const labelMatch = block.match(/label:\s*["']?(.+?)["']?\s*$/m);
+    const descMatch = block.match(/description:\s*["']?(.+?)["']?\s*$/m);
+    const placeholderMatch = block.match(/placeholder:\s*["']?([\s\S]*?)["']?\s*(?=\n\s*\w+:|$)/m);
+    const valueMatch = block.match(/value:\s*["']?([\s\S]*?)["']?\s*(?=\n\s*\w+:|$)/m);
+
+    const label = labelMatch?.[1]?.trim();
+    const description = descMatch?.[1]?.trim();
+    const placeholder = placeholderMatch?.[1]?.trim();
+    const value = valueMatch?.[1]?.trim();
+
+    switch (type) {
+      case "markdown":
+        // Use the value as-is (it's already markdown)
+        if (value) {
+          markdownParts.push(value);
+        }
+        break;
+
+      case "input":
+        // Create a labeled section for short input
+        if (label) {
+          let section = `### ${label}`;
+          if (description) {
+            section += `\n\n${description}`;
+          }
+          if (placeholder) {
+            section += `\n\n<!-- ${placeholder} -->`;
+          }
+          markdownParts.push(section);
+        }
+        break;
+
+      case "textarea":
+        // Create a labeled section for longer input
+        if (label) {
+          let section = `### ${label}`;
+          if (description) {
+            section += `\n\n${description}`;
+          }
+          if (placeholder) {
+            section += `\n\n<!-- ${placeholder} -->`;
+          } else if (value) {
+            // Some templates use value as default content
+            section += `\n\n${value}`;
+          }
+          markdownParts.push(section);
+        }
+        break;
+
+      case "dropdown":
+        // Create a section with options list
+        if (label) {
+          let section = `### ${label}`;
+          if (description) {
+            section += `\n\n${description}`;
+          }
+          // Parse options from the block
+          const optionsMatch = block.match(/options:\s*\n((?:\s*-\s*.+\n?)+)/);
+          if (optionsMatch?.[1]) {
+            const options = optionsMatch[1]
+              .split("\n")
+              .map((l) => l.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, ""))
+              .filter((l) => l.length > 0);
+            section += "\n\n**Options:**";
+            for (const opt of options) {
+              section += `\n- [ ] ${opt}`;
+            }
+          }
+          markdownParts.push(section);
+        }
+        break;
+
+      case "checkboxes":
+        // Create a section with checkbox list
+        if (label) {
+          let section = `### ${label}`;
+          if (description) {
+            section += `\n\n${description}`;
+          }
+          // Parse options from the block
+          const optionsMatch = block.match(/options:\s*\n((?:\s*-\s*(?:label:|required:)[\s\S]*?(?=\n\s*-\s*(?:label:|type:)|$))+)/);
+          if (optionsMatch?.[1]) {
+            const optionLabels = optionsMatch[1]
+              .split(/(?=\s*-\s*label:)/)
+              .map((opt) => {
+                const optLabelMatch = opt.match(/label:\s*["']?(.+?)["']?\s*$/m);
+                return optLabelMatch?.[1]?.trim();
+              })
+              .filter((l): l is string => !!l);
+            for (const opt of optionLabels) {
+              section += `\n- [ ] ${opt}`;
+            }
+          }
+          markdownParts.push(section);
+        }
+        break;
+    }
+  }
+
+  return markdownParts.join("\n\n");
+}
+
+/**
+ * Fetch available issue templates from the repository
+ * Returns empty array if no templates exist (graceful degradation)
+ */
+export async function fetchIssueTemplates(
+  repo: string
+): Promise<GitHubResult<IssueTemplate[]>> {
+  logDataSync("debug", "Fetching issue templates", { repo });
+
+  // First, list template files in .github/ISSUE_TEMPLATE/
+  const listArgs = [
+    "api",
+    `repos/${repo}/contents/.github/ISSUE_TEMPLATE`,
+    "--jq",
+    ".[].name",
+  ];
+
+  const listResult = await execGh(listArgs, DEFAULT_TIMEOUT_MS, 0);
+
+  if (!listResult.ok) {
+    // No templates directory - this is normal, return empty array
+    if (listResult.error.code === "command_failed") {
+      logDataSync("debug", "No issue templates found", { repo });
+      return ok([]);
+    }
+    return listResult;
+  }
+
+  // Parse file names (newline-separated)
+  const fileNames = listResult.value
+    .trim()
+    .split("\n")
+    .filter((f) => f.endsWith(".md") || f.endsWith(".yml") || f.endsWith(".yaml"));
+
+  if (fileNames.length === 0) {
+    return ok([]);
+  }
+
+  // Fetch each template's content
+  const templates: IssueTemplate[] = [];
+
+  for (const fileName of fileNames) {
+    // Skip config.yml which configures the template chooser
+    if (fileName === "config.yml" || fileName === "config.yaml") {
+      continue;
+    }
+
+    const contentArgs = [
+      "api",
+      `repos/${repo}/contents/.github/ISSUE_TEMPLATE/${fileName}`,
+      "--jq",
+      ".content",
+    ];
+
+    const contentResult = await execGh(contentArgs, DEFAULT_TIMEOUT_MS, 0);
+
+    if (!contentResult.ok) {
+      logDataSync("warn", "Failed to fetch template", { repo, fileName });
+      continue;
+    }
+
+    // Content is base64 encoded
+    try {
+      const base64Content = contentResult.value.trim();
+      const content = atob(base64Content);
+
+      // Use appropriate parser based on file extension
+      const isYamlTemplate = fileName.endsWith(".yml") || fileName.endsWith(".yaml");
+      const parsed = isYamlTemplate
+        ? parseYamlTemplate(content)
+        : parseMarkdownTemplate(content);
+
+      templates.push({
+        name: parsed.name ?? fileName.replace(/\.(md|yml|yaml)$/, ""),
+        about: parsed.about,
+        body: parsed.body,
+        labels: parsed.labels,
+      });
+    } catch (error) {
+      logDataSync("warn", "Failed to parse template", {
+        repo,
+        fileName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  logDataSync("info", "Issue templates loaded", { repo, count: templates.length });
+
+  return ok(templates);
+}
