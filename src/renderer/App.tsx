@@ -4,6 +4,7 @@ import type { Card } from '@core/types/card';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DotBackground } from './components/DotBackground';
 import { DetailedCardView } from './components/DetailedCardView';
+import { CreateIssueDialog } from './components/CreateIssueDialog';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
@@ -156,6 +157,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
+  const [isCreateIssueOpen, setIsCreateIssueOpen] = useState(false);
   const hasInitialized = useRef(false);
 
   const handleCardClick = useCallback((card: Card) => {
@@ -176,6 +178,20 @@ export default function App() {
     // Also update the selected card if it's the one being edited
     setSelectedCard(updatedCard);
   }, [setCards]);
+
+  const handleCreateIssue = useCallback(() => {
+    if (!repository) {
+      logSystem('warn', 'Cannot create issue: no repository configured');
+      return;
+    }
+    setIsCreateIssueOpen(true);
+  }, [repository]);
+
+  const handleIssueCreated = useCallback(async (issueNumber: number) => {
+    logUserAction('issue_created', 'New issue created, refreshing data', { issueNumber });
+    // Refresh to get the new issue from GitHub
+    await refresh();
+  }, [refresh]);
 
   // Initialize project selector and load repository config
   useEffect(() => {
@@ -280,6 +296,7 @@ export default function App() {
           cards={cards}
           onCardStatusChange={handleCardStatusChange}
           onCardClick={handleCardClick}
+          onCreateIssue={!isMock && repository ? handleCreateIssue : undefined}
         />
       </>
     );
@@ -375,6 +392,23 @@ export default function App() {
             onClose={handleCloseDetailedView}
             onCardUpdate={handleCardUpdate}
           />
+        </ErrorBoundary>
+        <ErrorBoundary
+          name="CreateIssueDialog"
+          fallback={(error, resetError) => (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6">
+              <CompactFallback error={error} onRetry={resetError} title="Create Issue Error" />
+            </div>
+          )}
+        >
+          {repository && (
+            <CreateIssueDialog
+              isOpen={isCreateIssueOpen}
+              onClose={() => setIsCreateIssueOpen(false)}
+              onIssueCreated={handleIssueCreated}
+              repo={repository}
+            />
+          )}
         </ErrorBoundary>
         <ProjectSelectorDialog
           isOpen={showProjectSelector}

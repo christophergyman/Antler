@@ -22,9 +22,10 @@ interface KanbanBoardProps {
   cards: Card[];
   onCardStatusChange: (cardId: string, newStatus: CardStatus) => void;
   onCardClick?: (card: Card) => void;
+  onCreateIssue?: () => void;
 }
 
-export function KanbanBoard({ cards, onCardStatusChange, onCardClick }: KanbanBoardProps) {
+export function KanbanBoard({ cards, onCardStatusChange, onCardClick, onCreateIssue }: KanbanBoardProps) {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
@@ -137,6 +138,7 @@ export function KanbanBoard({ cards, onCardStatusChange, onCardClick }: KanbanBo
             cards={cardsByStatus[column.id]}
             isOver={activeColumnId === column.id}
             onCardClick={onCardClick}
+            onCreateIssue={column.id === 'idle' ? onCreateIssue : undefined}
           />
         ))}
       </div>

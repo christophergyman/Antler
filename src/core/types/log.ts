@@ -49,7 +49,9 @@ export type UserActionType =
   | "project_clone"
   | "github_auth"
   | "open_terminal"
-  | "settings_save";
+  | "settings_save"
+  | "issue_created"
+  | "template_selected";
 
 // ============================================================================
 // Log Entry
