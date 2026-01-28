@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Card } from '@core/types/card';
 import type { ConfigError, GitHubError } from '@core/types/result';
-import { getCachedConfig } from '@services/config';
+import { getCachedConfig, getCurrentRepoRoot } from '@services/config';
 import { fetchIssuesWithPRs } from '@services/github';
 import { syncCards } from '@services/cardSync';
+import { restoreWorktreeState } from '@services/worktreeRestore';
 import { logDataSync, logPerformance, logDataRefresh } from '@services/logging';
 import type { DataSource } from './useDataSource';
 import { mockCards } from '../data/mockCards';
@@ -93,13 +94,33 @@ export function useCards({ dataSource }: UseCardsOptions): UseCardsReturn {
       // Use ref to get current cards without dependency, or empty array when clearing
       const currentCards = clearExisting ? [] : cardsRef.current;
       const syncResult = syncCards(currentCards, issuesResult.value);
-      setCards(syncResult.cards);
 
       logDataSync('info', 'Sync completed', {
         created: syncResult.stats.created,
         updated: syncResult.stats.updated,
         preserved: syncResult.stats.preserved,
       });
+
+      // Restore worktree state for cards with existing worktrees
+      const repoRootResult = await getCurrentRepoRoot();
+      if (repoRootResult.ok) {
+        const restoreResult = await restoreWorktreeState(syncResult.cards, repoRootResult.value);
+        setCards(restoreResult.cards);
+
+        if (restoreResult.stats.matched > 0) {
+          logDataSync('info', 'Worktree state restored', {
+            matched: restoreResult.stats.matched,
+            orphaned: restoreResult.stats.orphaned,
+          });
+        }
+      } else {
+        // If we can't get repo root, just use synced cards without restoration
+        logDataSync('warn', 'Could not get repo root for worktree restoration', {
+          error: repoRootResult.error.message,
+        });
+        setCards(syncResult.cards);
+      }
+
       logDataRefresh('github', syncResult.cards.length);
       logPerformance('GitHub data fetch', Date.now() - startTime);
     } catch (err) {

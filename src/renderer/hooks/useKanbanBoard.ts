@@ -12,6 +12,7 @@ import {
 import { logCardStatusChange, logUserAction, logWorktree, logConfig } from '@services/logging';
 import { getCurrentRepoRoot } from '@services/config';
 import { startWorkSession, stopWorkSession } from '@services/workSession';
+import { saveCardStatus, removeCardStatus } from '@services/cardStatus';
 
 interface UseKanbanBoardOptions {
   cards: Card[];
@@ -95,6 +96,11 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
           updateCard(card.sessionUid, (c) =>
             completeWorktreeCreation(c, result.value.worktreePath, result.value.port)
           );
+
+          // Persist status for session restoration
+          if (card.github.issueNumber !== null) {
+            saveCardStatus(card.github.issueNumber, 'in_progress');
+          }
         } else {
           // Failure - set error and revert to idle
           logWorktree('error', 'Work session start failed', {
@@ -189,6 +195,11 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
             cardName: card.name,
           });
           updateCard(card.sessionUid, (c) => setStatus(completeWorktreeRemoval(c), 'idle'));
+
+          // Remove persisted status since worktree is gone
+          if (card.github.issueNumber !== null) {
+            removeCardStatus(card.github.issueNumber);
+          }
         } else {
           // Failure - set error
           logWorktree('error', 'Work session stop failed', {
@@ -251,6 +262,11 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
             return setStatus(c, newStatus);
           })
         );
+
+        // Persist status for cards with worktrees (for session restoration)
+        if (card.worktreeCreated && card.github.issueNumber !== null) {
+          saveCardStatus(card.github.issueNumber, newStatus);
+        }
       }
     },
     [cards, onCardsChange, handleStartWorkSession, handleStopWorkSession]
