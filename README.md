@@ -30,7 +30,6 @@ Antler provides a visual workflow to track issues and PRs across multiple branch
 | Bun | latest | JavaScript runtime & package manager |
 | Vite | 7 | Frontend build tooling |
 | Rust | stable | Minimal backend (plugin hosting) |
-| Playwright | 1.57 | E2E testing framework |
 
 ## Prerequisites
 
@@ -106,19 +105,6 @@ bun run build
 
 This creates platform-specific binaries in `src-tauri/target/release/`.
 
-## E2E Testing
-
-```bash
-# Run tests in headless mode
-bun run test:e2e
-
-# Run tests with visible browser
-bun run test:e2e:headed
-
-# Interactive debugging mode
-bun run test:e2e:debug
-```
-
 ## Architecture
 
 Antler uses Tauri's two-tier architecture with all business logic in TypeScript:
@@ -170,10 +156,6 @@ src-tauri/          # Minimal Rust backend
 ├── Cargo.toml      # Rust dependencies
 ├── tauri.conf.json # Tauri configuration
 └── capabilities/   # Permission definitions
-
-e2e/
-├── fixtures/       # Playwright test fixtures
-└── tests/          # E2E test files
 ```
 
 ## Scripts Reference
@@ -184,9 +166,6 @@ e2e/
 | `build` | `bun run build` | Build production application |
 | `vite:dev` | `bun run vite:dev` | Start Vite dev server only |
 | `vite:build` | `bun run vite:build` | Build frontend only |
-| `test:e2e` | `bun run test:e2e` | Run E2E tests headless |
-| `test:e2e:headed` | `bun run test:e2e:headed` | Run E2E tests with visible browser |
-| `test:e2e:debug` | `bun run test:e2e:debug` | Run E2E tests in debug mode |
 
 ## Configuration Files
 
@@ -198,7 +177,6 @@ e2e/
 | `tailwind.config.js` | Tailwind CSS configuration |
 | `postcss.config.js` | PostCSS configuration |
 | `tsconfig.json` | TypeScript configuration with path aliases |
-| `e2e/playwright.config.ts` | Playwright E2E test configuration |
 | `antler.yaml` | User config (stored in app data directory, see Configuration section) |
 
 ## Key Patterns

@@ -24,11 +24,6 @@ bun run dev
 
 # Build
 bun run build
-
-# E2E tests
-bun run test:e2e              # headless
-bun run test:e2e:headed       # visible browser
-bun run test:e2e:debug        # interactive debug
 ```
 
 ## Configuration
