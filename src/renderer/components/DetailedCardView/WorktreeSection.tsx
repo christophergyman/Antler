@@ -7,9 +7,12 @@ import { memo, useState, useCallback } from "react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { executeOpen, executeOsascript } from "@services/commandExecutor";
-import { getTerminalApp, getPostOpenCommand } from "@services/config";
+import { getTerminalApp, getPostOpenCommand, getAutoPromptClaude } from "@services/config";
 import { buildCommandWithPort } from "@services/port";
 import { logUserAction, logPerformance } from "@services/logging";
+import { formatIssueAsClaudePrompt } from "@services/claudePrompt";
+import { writeTextFile, remove } from "@tauri-apps/plugin-fs";
+import { tempDir } from "@tauri-apps/api/path";
 import type { WorktreeSectionProps } from "./types";
 
 /**
@@ -26,6 +29,7 @@ export const WorktreeSection = memo(function WorktreeSection({
   worktreeCreated,
   worktreePath,
   port,
+  githubInfo,
 }: WorktreeSectionProps) {
   const [isOpening, setIsOpening] = useState(false);
 
@@ -37,9 +41,10 @@ export const WorktreeSection = memo(function WorktreeSection({
     logUserAction("open_terminal", "Opening terminal at worktree", { path: worktreePath, port });
 
     try {
-      const [terminalApp, postOpenCommand] = await Promise.all([
+      const [terminalApp, postOpenCommand, autoPromptClaude] = await Promise.all([
         getTerminalApp(),
         getPostOpenCommand(),
+        getAutoPromptClaude(),
       ]);
 
       // Build open command args
@@ -103,6 +108,67 @@ export const WorktreeSection = memo(function WorktreeSection({
         }
       }
 
+      // If auto-prompt Claude is enabled, invoke Claude with the issue context
+      if (autoPromptClaude && githubInfo && githubInfo.issueNumber !== null) {
+        logUserAction("open_terminal", "Auto-prompting Claude with issue context", {
+          issueNumber: githubInfo.issueNumber,
+        });
+
+        try {
+          // Format the issue as a Claude prompt
+          const prompt = formatIssueAsClaudePrompt(githubInfo);
+
+          // Write prompt to temp file (avoids escaping issues with special characters)
+          const tmpDir = await tempDir();
+          const tempFilePath = `${tmpDir}/claude-prompt-${Date.now()}.md`;
+          await writeTextFile(tempFilePath, prompt);
+
+          // Build the Claude command that reads from temp file and cleans up
+          const claudeCommand = `cat "${tempFilePath}" | claude --print && rm "${tempFilePath}"`;
+          const escapedClaudeCommand = escapeAppleScript(claudeCommand);
+
+          const appName = terminalApp || "Terminal";
+          const isITerm = appName.toLowerCase().includes("iterm");
+
+          // Small delay to let the terminal settle after previous command
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const claudeScript = isITerm
+            ? `tell application "iTerm"
+                 activate
+                 set currentSession to current session of current window
+                 tell currentSession
+                   write text "${escapedClaudeCommand}"
+                 end tell
+               end tell`
+            : `tell application "Terminal"
+                 activate
+                 do script "${escapedClaudeCommand}" in front window
+               end tell`;
+
+          const claudeResult = await executeOsascript(["-e", claudeScript]);
+          if (claudeResult.ok) {
+            logUserAction("open_terminal", "Claude invoked with issue context", {
+              issueNumber: githubInfo.issueNumber,
+              tempFile: tempFilePath,
+            });
+          } else {
+            // Clean up temp file on failure
+            try {
+              await remove(tempFilePath);
+            } catch {
+              // Ignore cleanup errors
+            }
+            logUserAction("open_terminal", "Failed to invoke Claude", {
+              error: claudeResult.error.message,
+            });
+          }
+        } catch (claudeError) {
+          const message = claudeError instanceof Error ? claudeError.message : String(claudeError);
+          logUserAction("open_terminal", "Error setting up Claude prompt", { error: message });
+        }
+      }
+
       const elapsed = Math.round(performance.now() - startTime);
       logPerformance("Terminal open operation completed", elapsed);
       logUserAction("open_terminal", "Terminal opened successfully", { path: worktreePath, elapsedMs: elapsed });
@@ -112,7 +178,7 @@ export const WorktreeSection = memo(function WorktreeSection({
     } finally {
       setIsOpening(false);
     }
-  }, [worktreePath, port]);
+  }, [worktreePath, port, githubInfo]);
 
   if (!worktreeCreated) {
     return (

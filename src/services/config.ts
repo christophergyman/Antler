@@ -22,6 +22,7 @@ export interface GitHubConfig {
 export interface TerminalSettings {
   readonly app?: string;           // e.g., "/Applications/iTerm.app" or "Terminal"
   readonly postOpenCommand?: string; // e.g., "bun run dev"
+  readonly autoPromptClaude?: boolean; // Auto-prompt Claude with issue context when opening terminal
 }
 
 export interface AntlerConfig {
@@ -36,6 +37,7 @@ interface RawConfig {
   terminal?: {
     app?: unknown;
     postOpenCommand?: unknown;
+    autoPromptClaude?: unknown;
   };
 }
 
@@ -54,13 +56,16 @@ function validateTerminalSettings(terminal: unknown): TerminalSettings | undefin
     return undefined;
   }
   const t = terminal as RawConfig["terminal"];
-  const result: { app?: string; postOpenCommand?: string } = {};
+  const result: { app?: string; postOpenCommand?: string; autoPromptClaude?: boolean } = {};
 
   if (t?.app !== undefined && typeof t.app === "string" && t.app.trim()) {
     result.app = t.app.trim();
   }
   if (t?.postOpenCommand !== undefined && typeof t.postOpenCommand === "string" && t.postOpenCommand.trim()) {
     result.postOpenCommand = t.postOpenCommand.trim();
+  }
+  if (t?.autoPromptClaude !== undefined && typeof t.autoPromptClaude === "boolean") {
+    result.autoPromptClaude = t.autoPromptClaude;
   }
 
   return Object.keys(result).length > 0 ? Object.freeze(result) : undefined;
@@ -549,4 +554,20 @@ export async function getPostOpenCommand(): Promise<string | null> {
   const command = result.value.terminal?.postOpenCommand ?? null;
   logConfig("debug", "Retrieved post-open command setting", { hasCommand: Boolean(command) });
   return command;
+}
+
+/**
+ * Get the auto-prompt Claude setting
+ * When enabled, Claude will be invoked with the GitHub issue context when opening terminal
+ * Returns false if not configured
+ */
+export async function getAutoPromptClaude(): Promise<boolean> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get auto-prompt Claude setting - config unavailable");
+    return false;
+  }
+  const enabled = result.value.terminal?.autoPromptClaude ?? false;
+  logConfig("debug", "Retrieved auto-prompt Claude setting", { enabled });
+  return enabled;
 }

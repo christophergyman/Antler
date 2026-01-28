@@ -129,6 +129,7 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
             <TerminalSettingsSection
               terminalApp={settings.terminalApp}
               postOpenCommand={settings.postOpenCommand}
+              autoPromptClaude={settings.autoPromptClaude}
               onSave={settings.saveTerminalSettings}
             />
           </SettingsGroup>

@@ -15,6 +15,7 @@ import {
   saveConfigContent,
   getTerminalApp,
   getPostOpenCommand,
+  getAutoPromptClaude,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import { logConfig, logDataSync } from "@services/logging";
@@ -37,6 +38,7 @@ interface SettingsState {
   // Terminal
   terminalApp: string | null;
   postOpenCommand: string | null;
+  autoPromptClaude: boolean | null;
 }
 
 export function useSettings() {
@@ -53,6 +55,7 @@ export function useSettings() {
     isCheckingAuth: true,
     terminalApp: null,
     postOpenCommand: null,
+    autoPromptClaude: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -140,30 +143,33 @@ export function useSettings() {
 
   const loadTerminalSettings = useCallback(async () => {
     logConfig("debug", "Loading terminal settings");
-    const [app, command] = await Promise.all([
+    const [app, command, autoPrompt] = await Promise.all([
       getTerminalApp(),
       getPostOpenCommand(),
+      getAutoPromptClaude(),
     ]);
     setState((prev) => ({
       ...prev,
       terminalApp: app,
       postOpenCommand: command,
+      autoPromptClaude: autoPrompt,
     }));
-    logConfig("debug", "Terminal settings loaded", { app, command });
+    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt });
   }, []);
 
-  const saveTerminalSettings = useCallback(async (app: string, command: string): Promise<void> => {
-    logConfig("info", "Saving terminal settings", { app, command });
+  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean): Promise<void> => {
+    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude });
 
     // Load current config content and update it
     const contentResult = await getConfigContent();
     if (!contentResult.ok) {
       // Create new config with terminal settings
       logConfig("debug", "Config file does not exist, creating new config");
+      const hasTerminalSettings = app || command || autoPromptClaude;
       const newContent = `github:
   repository: ""
-${app || command ? `terminal:
-${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}` : ""}`;
+${hasTerminalSettings ? `terminal:
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}` : ""}`;
       await saveConfigContent(newContent);
     } else {
       // Parse and update existing config
@@ -173,10 +179,12 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
         const parsed = load(contentResult.value) as Record<string, unknown>;
 
         // Update terminal section
-        if (app || command) {
+        const hasTerminalSettings = app || command || autoPromptClaude;
+        if (hasTerminalSettings) {
           parsed.terminal = {
             ...(app && { app }),
             ...(command && { postOpenCommand: command }),
+            ...(autoPromptClaude && { autoPromptClaude }),
           };
         } else {
           delete parsed.terminal;
