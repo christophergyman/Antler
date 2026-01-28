@@ -28,8 +28,6 @@ export const CATEGORY_DISPLAY_NAMES: Record<LogCategory, string> = {
   user_action: "Action Error",
   performance: "Performance Error",
   worktree: "Worktree Error",
-  devcontainer: "Devcontainer Error",
-  docker: "Docker Error",
   prerequisites: "Setup Error",
   project: "Project Error",
 } as const;

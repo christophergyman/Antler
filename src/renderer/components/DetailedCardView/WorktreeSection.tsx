@@ -1,6 +1,6 @@
 /**
  * WorktreeSection Component
- * Read-only display of worktree and devcontainer status with terminal action
+ * Read-only display of worktree status with terminal action
  */
 
 import { memo, useState, useCallback } from "react";
@@ -8,6 +8,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { executeOpen, executeOsascript } from "@services/commandExecutor";
 import { getTerminalApp, getPostOpenCommand } from "@services/config";
+import { buildCommandWithPort } from "@services/port";
 import { logUserAction, logPerformance } from "@services/logging";
 import type { WorktreeSectionProps } from "./types";
 
@@ -24,8 +25,7 @@ function escapeAppleScript(str: string): string {
 export const WorktreeSection = memo(function WorktreeSection({
   worktreeCreated,
   worktreePath,
-  devcontainerRunning,
-  devcontainerPort,
+  port,
 }: WorktreeSectionProps) {
   const [isOpening, setIsOpening] = useState(false);
 
@@ -34,7 +34,7 @@ export const WorktreeSection = memo(function WorktreeSection({
 
     setIsOpening(true);
     const startTime = performance.now();
-    logUserAction("open_terminal", "Opening terminal at worktree", { path: worktreePath });
+    logUserAction("open_terminal", "Opening terminal at worktree", { path: worktreePath, port });
 
     try {
       const [terminalApp, postOpenCommand] = await Promise.all([
@@ -62,9 +62,14 @@ export const WorktreeSection = memo(function WorktreeSection({
 
       // If there's a post-open command, use native terminal APIs to execute it
       if (postOpenCommand) {
+        // Inject PORT environment variable if we have a port assigned
+        const finalCommand = port !== null
+          ? buildCommandWithPort(postOpenCommand, port)
+          : postOpenCommand;
+
         const appName = terminalApp || "Terminal";
         const isITerm = appName.toLowerCase().includes("iterm");
-        const escapedCommand = escapeAppleScript(postOpenCommand);
+        const escapedCommand = escapeAppleScript(finalCommand);
 
         // Use native terminal APIs instead of unreliable keystroke simulation
         const script = isITerm
@@ -83,13 +88,14 @@ export const WorktreeSection = memo(function WorktreeSection({
         const osascriptResult = await executeOsascript(["-e", script]);
         if (osascriptResult.ok) {
           logUserAction("open_terminal", "Command executed via native terminal API", {
-            command: postOpenCommand,
+            command: finalCommand,
             app: appName,
             isITerm,
+            port,
           });
         } else {
           logUserAction("open_terminal", "Terminal command execution failed", {
-            command: postOpenCommand,
+            command: finalCommand,
             app: appName,
             isITerm,
             error: osascriptResult.error.message,
@@ -106,7 +112,7 @@ export const WorktreeSection = memo(function WorktreeSection({
     } finally {
       setIsOpening(false);
     }
-  }, [worktreePath]);
+  }, [worktreePath, port]);
 
   if (!worktreeCreated) {
     return (
@@ -119,9 +125,9 @@ export const WorktreeSection = memo(function WorktreeSection({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Badge className="bg-purple-100 text-purple-800">Worktree Active</Badge>
-          {devcontainerRunning && (
+          {port !== null && (
             <Badge className="bg-cyan-100 text-cyan-800">
-              Devcontainer: Port {devcontainerPort}
+              Port {port}
             </Badge>
           )}
         </div>

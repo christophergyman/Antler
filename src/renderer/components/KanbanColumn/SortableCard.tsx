@@ -72,8 +72,7 @@ export const SortableCard = memo(function SortableCard({ card, onClick }: Sortab
         worktreeOperation={card.worktreeOperation}
         worktreeError={card.worktreeError}
         worktreeCreated={card.worktreeCreated}
-        devcontainerRunning={card.devcontainerRunning}
-        devcontainerPort={card.devcontainerPort}
+        port={card.port}
       />
     </div>
   );

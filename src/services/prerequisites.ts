@@ -1,11 +1,10 @@
 /**
  * Prerequisites Service
- * Verifies required tools are installed and running
+ * Verifies required tools are installed
  */
 
 import type { PrerequisiteResult } from "@core/types/result";
 import { ok, err, createPrerequisiteError } from "@core/types/result";
-import { checkDevcontainerCli, checkDockerRunning } from "./devcontainer";
 import { logPrerequisites } from "./logging";
 import { executeGit } from "./commandExecutor";
 
@@ -54,31 +53,21 @@ async function checkGit(): Promise<PrerequisiteResult<void>> {
 
 export interface PrerequisiteStatus {
   readonly git: boolean;
-  readonly devcontainer: boolean;
-  readonly docker: boolean;
 }
 
 /**
- * Check all prerequisites for worktree + devcontainer operations
+ * Check all prerequisites for worktree operations
  * Returns detailed error if any prerequisite is missing
  */
 export async function checkPrerequisites(): Promise<PrerequisiteResult<PrerequisiteStatus>> {
   logPrerequisites("info", "Checking prerequisites");
 
-  // Check all in parallel
-  const [gitResult, devcontainerResult, dockerResult] = await Promise.all([
-    checkGit(),
-    checkDevcontainerCli(),
-    checkDockerRunning(),
-  ]);
+  const gitResult = await checkGit();
 
   const status: PrerequisiteStatus = {
     git: gitResult.ok,
-    devcontainer: devcontainerResult.ok,
-    docker: dockerResult.ok,
   };
 
-  // Return first error encountered (in order of importance)
   if (!gitResult.ok) {
     logPrerequisites("error", "Git not installed");
     return err(
@@ -86,40 +75,6 @@ export async function checkPrerequisites(): Promise<PrerequisiteResult<Prerequis
         "git_not_installed",
         gitResult.error.message,
         gitResult.error.details
-      )
-    );
-  }
-
-  if (!devcontainerResult.ok) {
-    logPrerequisites("error", "Devcontainer CLI not installed");
-    return err(
-      createPrerequisiteError(
-        "devcontainer_not_installed",
-        devcontainerResult.error.message,
-        devcontainerResult.error.details
-      )
-    );
-  }
-
-  if (!dockerResult.ok) {
-    logPrerequisites("error", "Docker not running");
-
-    // Distinguish between not installed and not running
-    if (dockerResult.error.message.includes("not installed")) {
-      return err(
-        createPrerequisiteError(
-          "docker_not_installed",
-          dockerResult.error.message,
-          dockerResult.error.details
-        )
-      );
-    }
-
-    return err(
-      createPrerequisiteError(
-        "docker_not_running",
-        dockerResult.error.message,
-        dockerResult.error.details
       )
     );
   }

@@ -91,43 +91,10 @@ export function createWorktreeError(
 }
 
 // ============================================================================
-// Devcontainer Errors
-// ============================================================================
-
-export type DevcontainerErrorCode =
-  | "devcontainer_not_installed"
-  | "docker_not_running"
-  | "no_devcontainer_config"
-  | "devcontainer_start_failed"
-  | "devcontainer_stop_failed"
-  | "no_available_ports"
-  | "port_parse_failed";
-
-export interface DevcontainerError {
-  readonly code: DevcontainerErrorCode;
-  readonly message: string;
-  readonly details?: string;
-}
-
-export function createDevcontainerError(
-  code: DevcontainerErrorCode,
-  message: string,
-  details?: string
-): DevcontainerError {
-  return Object.freeze({ code, message, details });
-}
-
-// ============================================================================
 // Prerequisites Errors
 // ============================================================================
 
-export type PrerequisiteErrorCode =
-  | "git_not_installed"
-  | "devcontainer_not_installed"
-  | "docker_not_running"
-  | "docker_not_installed"
-  | "colima_not_installed"
-  | "colima_start_failed";
+export type PrerequisiteErrorCode = "git_not_installed";
 
 export interface PrerequisiteError {
   readonly code: PrerequisiteErrorCode;
@@ -150,7 +117,7 @@ export function createPrerequisiteError(
 export type WorkSessionErrorCode =
   | "prerequisite_failed"
   | "worktree_failed"
-  | "devcontainer_failed"
+  | "port_allocation_failed"
   | "cancelled";
 
 export interface WorkSessionError {
@@ -174,6 +141,5 @@ export function createWorkSessionError(
 export type ConfigResult<T> = Result<T, ConfigError>;
 export type GitHubResult<T> = Result<T, GitHubError>;
 export type WorktreeResult<T> = Result<T, WorktreeError>;
-export type DevcontainerResult<T> = Result<T, DevcontainerError>;
 export type PrerequisiteResult<T> = Result<T, PrerequisiteError>;
 export type WorkSessionResult<T> = Result<T, WorkSessionError>;

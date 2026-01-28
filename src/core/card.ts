@@ -73,12 +73,8 @@ function validateCardObject(obj: unknown): asserts obj is Record<string, unknown
     throw new Error("Invalid card: worktreeError must be a string or null");
   }
 
-  if (typeof o.devcontainerRunning !== "boolean") {
-    throw new Error("Invalid card: devcontainerRunning must be a boolean");
-  }
-
-  if (o.devcontainerPort !== null && typeof o.devcontainerPort !== "number") {
-    throw new Error("Invalid card: devcontainerPort must be a number or null");
+  if (o.port !== null && typeof o.port !== "number") {
+    throw new Error("Invalid card: port must be a number or null");
   }
 }
 
@@ -95,8 +91,7 @@ export interface CreateCardOptions {
   worktreePath?: string | null;
   worktreeOperation?: WorktreeOperation;
   worktreeError?: string | null;
-  devcontainerRunning?: boolean;
-  devcontainerPort?: number | null;
+  port?: number | null;
 }
 
 export function createCard(options: CreateCardOptions = {}): Card {
@@ -114,8 +109,7 @@ export function createCard(options: CreateCardOptions = {}): Card {
     worktreePath: options.worktreePath ?? null,
     worktreeOperation: options.worktreeOperation ?? "idle",
     worktreeError: options.worktreeError ?? null,
-    devcontainerRunning: options.devcontainerRunning ?? false,
-    devcontainerPort: options.devcontainerPort ?? null,
+    port: options.port ?? null,
   });
 }
 
@@ -214,12 +208,8 @@ export function setWorktreeError(card: Card, error: string | null): Card {
   return touchUpdatedAt(Object.freeze({ ...card, worktreeError: error }));
 }
 
-export function setDevcontainerRunning(card: Card, running: boolean): Card {
-  return touchUpdatedAt(Object.freeze({ ...card, devcontainerRunning: running }));
-}
-
-export function setDevcontainerPort(card: Card, port: number | null): Card {
-  return touchUpdatedAt(Object.freeze({ ...card, devcontainerPort: port }));
+export function setPort(card: Card, port: number | null): Card {
+  return touchUpdatedAt(Object.freeze({ ...card, port }));
 }
 
 export function startWorktreeCreation(card: Card): Card {
@@ -237,8 +227,7 @@ export function completeWorktreeCreation(card: Card, path: string, port: number)
     worktreePath: path,
     worktreeOperation: "idle" as WorktreeOperation,
     worktreeError: null,
-    devcontainerRunning: true,
-    devcontainerPort: port,
+    port,
   }));
 }
 
@@ -257,8 +246,7 @@ export function completeWorktreeRemoval(card: Card): Card {
     worktreePath: null,
     worktreeOperation: "idle" as WorktreeOperation,
     worktreeError: null,
-    devcontainerRunning: false,
-    devcontainerPort: null,
+    port: null,
   }));
 }
 
@@ -322,8 +310,8 @@ export function isWorktreeOperationInProgress(card: Card): boolean {
   return card.worktreeOperation === "creating" || card.worktreeOperation === "removing";
 }
 
-export function isDevcontainerRunning(card: Card): boolean {
-  return card.devcontainerRunning;
+export function hasPort(card: Card): boolean {
+  return card.port !== null;
 }
 
 // ============================================================================
@@ -350,8 +338,7 @@ export function fromJSON(json: string): Card {
     worktreePath: parsed.worktreePath as string | null,
     worktreeOperation: parsed.worktreeOperation as WorktreeOperation,
     worktreeError: parsed.worktreeError as string | null,
-    devcontainerRunning: parsed.devcontainerRunning as boolean,
-    devcontainerPort: parsed.devcontainerPort as number | null,
+    port: parsed.port as number | null,
   });
 }
 
@@ -381,8 +368,7 @@ export function fromJSONArray(json: string): Card[] {
         worktreePath: item.worktreePath as string | null,
         worktreeOperation: item.worktreeOperation as WorktreeOperation,
         worktreeError: item.worktreeError as string | null,
-        devcontainerRunning: item.devcontainerRunning as boolean,
-        devcontainerPort: item.devcontainerPort as number | null,
+        port: item.port as number | null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";

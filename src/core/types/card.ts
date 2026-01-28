@@ -23,7 +23,5 @@ export interface Card {
   readonly worktreePath: string | null;
   readonly worktreeOperation: WorktreeOperation;
   readonly worktreeError: string | null;
-  // Devcontainer fields
-  readonly devcontainerRunning: boolean;
-  readonly devcontainerPort: number | null;
+  readonly port: number | null;
 }

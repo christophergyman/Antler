@@ -47,6 +47,9 @@ src-tauri/target
 # Git worktrees (runtime)
 .worktrees
 
+# Worktree port assignments
+.port
+
 # Playwright
 playwright-report
 test-results

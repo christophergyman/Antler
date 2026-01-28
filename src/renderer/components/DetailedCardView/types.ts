@@ -90,6 +90,5 @@ export interface AddCommentFormProps {
 export interface WorktreeSectionProps {
   worktreeCreated: boolean;
   worktreePath: string | null;
-  devcontainerRunning: boolean;
-  devcontainerPort: number | null;
+  port: number | null;
 }

@@ -1,6 +1,6 @@
 /**
  * Work Session Service
- * Orchestrates worktree creation and devcontainer startup
+ * Orchestrates worktree creation with port allocation
  */
 
 import type { Card } from "@core/types/card";
@@ -11,15 +11,9 @@ import {
   createWorktree,
   removeWorktree,
   generateBranchName,
-  getWorktreePath,
 } from "./worktree";
-import {
-  findAvailablePort,
-  startDevcontainer,
-  stopDevcontainer,
-  hasDevcontainerConfig,
-} from "./devcontainer";
-import { logWorktree, logDevcontainer, logPrerequisites, logUserAction } from "./logging";
+import { allocatePort } from "./port";
+import { logWorktree, logPrerequisites, logUserAction } from "./logging";
 
 // ============================================================================
 // Types
@@ -60,7 +54,7 @@ export function getBranchNameForCard(card: Card): string | null {
 
 /**
  * Start a work session for a card
- * Creates worktree and starts devcontainer
+ * Creates worktree and allocates a unique port
  *
  * Uses a cleanup tracking flag to prevent double cleanup when abort races
  * with async operation completion.
@@ -133,25 +127,12 @@ export async function startWorkSession(
     );
   }
 
-  // Step 3: Check for devcontainer config before creating worktree
-  // Check in the main repo first (worktree will inherit it)
-  const hasConfig = await hasDevcontainerConfig(repoRoot);
-  if (!hasConfig) {
-    return err(
-      createWorkSessionError(
-        "devcontainer_failed",
-        "No devcontainer.json found",
-        `Repository must have a .devcontainer/devcontainer.json configuration`
-      )
-    );
-  }
-
   // Check for cancellation
   if (signal?.aborted) {
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
-  // Step 4: Create worktree
+  // Step 3: Create worktree
   logWorktree("info", "Creating worktree", { branchName, cardId: card.sessionUid });
   const worktreeResult = await createWorktree(repoRoot, branchName, signal);
 
@@ -182,58 +163,24 @@ export async function startWorkSession(
     return err(createWorkSessionError("cancelled", "Operation cancelled"));
   }
 
-  // Step 5: Find available port
-  logDevcontainer("debug", "Finding available port for devcontainer");
-  const portResult = await findAvailablePort();
-
-  if (!portResult.ok) {
-    // Rollback: remove worktree
-    logDevcontainer("error", "Port allocation failed, rolling back worktree", {
-      code: portResult.error.code,
-      message: portResult.error.message,
+  // Step 4: Allocate port
+  logWorktree("debug", "Allocating port for worktree", { worktreePath });
+  let port: number;
+  try {
+    port = await allocatePort(repoRoot, worktreePath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logWorktree("error", "Port allocation failed, rolling back worktree", {
+      message,
       branchName,
       cardId: card.sessionUid,
     });
     await performCleanup();
-
     return err(
       createWorkSessionError(
-        "devcontainer_failed",
-        portResult.error.message,
-        portResult.error.details
-      )
-    );
-  }
-
-  const port = portResult.value;
-
-  // Check for cancellation - cleanup worktree if cancelled
-  if (signal?.aborted) {
-    await performCleanup();
-    return err(createWorkSessionError("cancelled", "Operation cancelled"));
-  }
-
-  // Step 6: Start devcontainer
-  logDevcontainer("info", "Starting devcontainer", { worktreePath, port, cardId: card.sessionUid });
-  const devcontainerResult = await startDevcontainer(worktreePath, port, signal);
-
-  if (!devcontainerResult.ok) {
-    // Rollback: remove worktree
-    logDevcontainer("error", "Devcontainer start failed, rolling back worktree", {
-      code: devcontainerResult.error.code,
-      message: devcontainerResult.error.message,
-      details: devcontainerResult.error.details,
-      worktreePath,
-      port,
-      cardId: card.sessionUid,
-    });
-    await performCleanup();
-
-    return err(
-      createWorkSessionError(
-        "devcontainer_failed",
-        devcontainerResult.error.message,
-        devcontainerResult.error.details
+        "port_allocation_failed",
+        "Failed to allocate port",
+        message
       )
     );
   }
@@ -255,7 +202,7 @@ export async function startWorkSession(
 
 /**
  * Stop a work session for a card
- * Stops devcontainer and removes worktree
+ * Removes worktree (port file is automatically cleaned up with worktree)
  */
 export async function stopWorkSession(
   repoRoot: string,
@@ -274,23 +221,7 @@ export async function stopWorkSession(
     return ok(undefined);
   }
 
-  const worktreePath = card.worktreePath ?? getWorktreePath(repoRoot, branchName);
-
-  // Step 1: Stop devcontainer
-  logDevcontainer("info", "Stopping devcontainer", { worktreePath, cardId: card.sessionUid });
-  const stopResult = await stopDevcontainer(worktreePath);
-
-  if (!stopResult.ok) {
-    logDevcontainer("warn", "Failed to stop devcontainer, continuing with cleanup", {
-      code: stopResult.error.code,
-      message: stopResult.error.message,
-      worktreePath,
-      cardId: card.sessionUid,
-    });
-    // Continue with worktree removal even if devcontainer stop fails
-  }
-
-  // Step 2: Remove worktree
+  // Remove worktree (port file is inside worktree, so it's automatically deleted)
   logWorktree("info", "Removing worktree", { branchName, cardId: card.sessionUid });
   const removeResult = await removeWorktree(repoRoot, branchName);
 

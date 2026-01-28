@@ -4,9 +4,9 @@ import { Badge } from '../ui/badge';
 import { ERROR_BADGE_COLOR } from '../../constants/status';
 import type { KanbanCardProps } from './types';
 
-// Colors for worktree/devcontainer badges
+// Colors for worktree badges
 const WORKTREE_BADGE_COLOR = '#8b5cf6'; // Purple
-const DEVCONTAINER_BADGE_COLOR = '#06b6d4'; // Cyan
+const PORT_BADGE_COLOR = '#06b6d4'; // Cyan
 const CREATING_BADGE_COLOR = '#f59e0b'; // Amber
 const REMOVING_BADGE_COLOR = '#f59e0b'; // Amber
 
@@ -45,8 +45,7 @@ export const KanbanCard = memo(function KanbanCard({
   worktreeOperation,
   worktreeError,
   worktreeCreated,
-  devcontainerRunning,
-  devcontainerPort,
+  port,
 }: KanbanCardProps) {
   const isCreating = worktreeOperation === 'creating';
   const isRemoving = worktreeOperation === 'removing';
@@ -59,7 +58,6 @@ export const KanbanCard = memo(function KanbanCard({
     isCreating ||
     isRemoving ||
     worktreeCreated ||
-    devcontainerRunning ||
     (labels && labels.length > 0);
 
   return (
@@ -119,13 +117,13 @@ export const KanbanCard = memo(function KanbanCard({
                 Worktree
               </Badge>
             )}
-            {devcontainerRunning && !isCreating && !isRemoving && (
+            {port !== null && port !== undefined && worktreeCreated && !isCreating && !isRemoving && (
               <Badge
                 className="text-xs text-white"
-                style={{ backgroundColor: DEVCONTAINER_BADGE_COLOR }}
-                title={devcontainerPort ? `Port ${devcontainerPort}` : undefined}
+                style={{ backgroundColor: PORT_BADGE_COLOR }}
+                title={`Port ${port}`}
               >
-                Devcontainer{devcontainerPort ? ` :${devcontainerPort}` : ''}
+                :{port}
               </Badge>
             )}
 

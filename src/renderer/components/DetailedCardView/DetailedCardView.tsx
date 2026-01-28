@@ -339,8 +339,7 @@ export function DetailedCardView({
                 <WorktreeSection
                   worktreeCreated={card.worktreeCreated}
                   worktreePath={card.worktreePath}
-                  devcontainerRunning={card.devcontainerRunning}
-                  devcontainerPort={card.devcontainerPort}
+                  port={card.port}
                 />
               </SidebarCard>
             </div>

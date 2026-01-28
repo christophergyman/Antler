@@ -16,8 +16,6 @@ export type LogCategory =
   | "system"
   | "performance"
   | "worktree"
-  | "devcontainer"
-  | "docker"
   | "prerequisites"
   | "project";
 

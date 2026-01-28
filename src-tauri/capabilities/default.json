@@ -27,24 +27,6 @@
           "sidecar": false
         },
         {
-          "name": "run-devcontainer",
-          "cmd": "devcontainer",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "run-docker",
-          "cmd": "docker",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "run-colima",
-          "cmd": "colima",
-          "args": true,
-          "sidecar": false
-        },
-        {
           "name": "run-open",
           "cmd": "open",
           "args": true,
@@ -76,24 +58,6 @@
         {
           "name": "run-git",
           "cmd": "git",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "run-devcontainer",
-          "cmd": "devcontainer",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "run-docker",
-          "cmd": "docker",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "run-colima",
-          "cmd": "colima",
           "args": true,
           "sidecar": false
         },

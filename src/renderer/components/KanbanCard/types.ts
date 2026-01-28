@@ -6,10 +6,9 @@ export interface KanbanCardProps {
   labels?: readonly string[];
   hasError?: boolean;
   isDragging?: boolean;
-  // Worktree/devcontainer state
+  // Worktree state
   worktreeOperation?: WorktreeOperation;
   worktreeError?: string | null;
   worktreeCreated?: boolean;
-  devcontainerRunning?: boolean;
-  devcontainerPort?: number | null;
+  port?: number | null;
 }

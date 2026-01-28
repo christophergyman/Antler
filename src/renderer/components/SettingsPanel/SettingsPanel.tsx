@@ -8,9 +8,7 @@ import { Button } from "../ui/button";
 import type { SettingsPanelProps } from "./types";
 import { SettingsGroup } from "./SettingsGroup";
 import { GitRepoSection } from "./GitRepoSection";
-import { DevcontainerEditorSection } from "./DevcontainerEditorSection";
 import { AntlerConfigSection } from "./AntlerConfigSection";
-import { DockerSection } from "./DockerSection";
 import { GitHubAuthSection } from "./GitHubAuthSection";
 import { ProjectSection } from "./ProjectSection";
 import { TerminalSettingsSection } from "./TerminalSettingsSection";
@@ -124,21 +122,6 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
           {/* Development Environment Group */}
           <SettingsGroup title="Development Environment">
             <GitRepoSection isGitRepo={settings.isGitRepo} />
-            <DockerSection
-              status={settings.dockerStatus}
-              isLoading={settings.isCheckingDocker}
-              onStatusChange={settings.refresh}
-            />
-          </SettingsGroup>
-
-          {/* Devcontainer Editor Group */}
-          <SettingsGroup title="Devcontainer">
-            <DevcontainerEditorSection
-              hasConfig={settings.hasDevcontainerConfig}
-              configContent={settings.devcontainerConfig}
-              configPath={settings.devcontainerConfigPath}
-              onSave={settings.saveDevcontainerConfig}
-            />
           </SettingsGroup>
 
           {/* Terminal Settings Group */}

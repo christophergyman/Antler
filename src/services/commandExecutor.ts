@@ -371,26 +371,6 @@ export async function executeGit(
 }
 
 /**
- * Execute a docker command
- */
-export async function executeDocker(
-  args: string[],
-  options: Omit<CommandOptions, "logCategory"> = {}
-): Promise<ExecuteResult> {
-  return executeCommand("run-docker", args, { ...options, logCategory: "docker" });
-}
-
-/**
- * Execute a devcontainer CLI command
- */
-export async function executeDevcontainer(
-  args: string[],
-  options: Omit<CommandOptions, "logCategory"> = {}
-): Promise<ExecuteResult> {
-  return executeCommand("run-devcontainer", args, { ...options, logCategory: "devcontainer" });
-}
-
-/**
  * Execute macOS open command (for opening applications/files)
  */
 export async function executeOpen(

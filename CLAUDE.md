@@ -12,9 +12,6 @@ Antler is a Tauri v2 desktop application for managing parallel GitHub work sessi
 - **Rust** (stable) - Required for Tauri backend compilation
 - **Git** - Version control
 - **GitHub CLI** (`gh`) - Required for fetching issues and PRs
-- **Docker runtime** - Required for devcontainer work sessions:
-  - **macOS**: [Colima](https://github.com/abiosoft/colima) (`brew install colima`) - auto-started by Antler
-  - **Linux/Windows**: Docker Desktop or Docker daemon
 
 ## Commands
 
@@ -92,13 +89,13 @@ Key configuration files in `src-tauri/`:
 - **`capabilities/default.json`** - Permission definitions for plugins
 
 **Current permissions:**
-- `shell:allow-execute` - Execute shell commands (scoped to `gh`, `git`, `docker`, `colima`, `devcontainer`)
+- `shell:allow-execute` - Execute shell commands (scoped to `gh`, `git`, `open`, `osascript`)
 - `fs:allow-read`, `fs:allow-exists` - Read files (for config loading)
 - `fs:allow-write`, `fs:allow-mkdir`, `fs:allow-remove` - Write files (for logging)
 - `path:default` - Access path utilities
-- `os:default` - Platform detection (for macOS-specific Colima handling)
+- `os:default` - Platform detection
 
-**Shell plugin scope:** Commands `gh`, `git`, `docker`, `colima`, `devcontainer` are allowed. To add other commands, update `shell:allow-execute` in `src-tauri/capabilities/default.json`.
+**Shell plugin scope:** Commands `gh`, `git`, `open`, `osascript` are allowed. To add other commands, update `shell:allow-execute` in `src-tauri/capabilities/default.json`.
 
 ## Architecture
 
@@ -108,7 +105,7 @@ Key configuration files in `src-tauri/`:
 
 ### Directory Structure
 - **src/core/** - Shared TypeScript (Card types, operations, utilities)
-- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts, logging.ts, dockerRuntime.ts)
+- **src/services/** - Frontend services using Tauri plugins (github.ts, config.ts, cardSync.ts, logging.ts, worktree.ts, port.ts)
 - **src/renderer/** - React components and hooks
   - `components/` - KanbanBoard/, KanbanColumn/, KanbanCard/, DotBackground/, ui/
   - `hooks/` - useCards, useKanbanBoard, useDataSource
@@ -128,6 +125,16 @@ All Card operations are **immutable** (return new objects via `Object.freeze`). 
 **Status values:** `idle`, `in_progress`, `waiting`, `done`
 
 Status changes auto-clear errors when moving cards out of the 'waiting' column.
+
+### Worktree & Port System
+
+Worktrees are git's built-in feature for working on multiple branches simultaneously. Antler creates worktrees in `.worktrees/{branch-name}/` within the repository.
+
+**Port allocation:** Each worktree is assigned a unique port (3000-3999) stored in `.worktrees/{branch}/.port`. When opening a terminal:
+- The `postOpenCommand` (e.g., `bun run dev`) is prefixed with `PORT={allocated-port}`
+- Example: `PORT=3000 bun run dev`
+
+Ports are allocated sequentially to avoid conflicts. When a worktree is removed, its port becomes available for reuse.
 
 ### Build Output
 Vite compiles frontend to `dist/`. Tauri builds platform-specific binaries to `src-tauri/target/`.
@@ -194,17 +201,16 @@ The app uses a three-layer logging system: console output (development), DevTool
 | `data_sync` | GitHub API calls, data fetching |
 | `user_action` | User interactions (card moves, toggles, refreshes) |
 | `performance` | Timing metrics |
-| `worktree` | Git worktree operations (create, remove, list) |
-| `devcontainer` | Devcontainer lifecycle (start, stop, port allocation) |
-| `docker` | Docker runtime detection and Colima management |
-| `prerequisites` | Tool installation checks (git, docker, devcontainer CLI) |
+| `worktree` | Git worktree operations (create, remove, list, port allocation) |
+| `prerequisites` | Tool installation checks (git) |
+| `project` | Project selection and management |
 
 ### Usage
 
 ```typescript
 import {
   logSystem, logConfig, logDataSync, logUserAction, logPerformance,
-  logWorktree, logDevcontainer, logDocker, logPrerequisites
+  logWorktree, logPrerequisites
 } from '@services/logging';
 
 // Category-specific logging
@@ -216,8 +222,7 @@ logPerformance('Data fetch completed', 1234);
 
 // Work session logging
 logWorktree('info', 'Creating worktree', { branchName, cardId });
-logDevcontainer('error', 'Devcontainer start failed', { code, message, port });
-logDocker('info', 'Docker runtime ready');
+logWorktree('info', 'Port allocated', { port: 3000, worktreePath });
 logPrerequisites('error', 'Git not installed');
 
 // Convenience functions
@@ -256,6 +261,6 @@ error('Failure occurred');
 - **Factory functions**: Use `createCard()`, `createGitHubInfo()` for type-safe object creation
 - **Parallel operations**: Use `Promise.all`/`Promise.allSettled` for concurrent work
 - **Tauri plugins**: Services use `@tauri-apps/plugin-shell`, `@tauri-apps/plugin-fs`, and `@tauri-apps/plugin-os` for native access
-- **Auto-start Docker**: On macOS, Colima is auto-started at app boot if Docker isn't running
 - **Path aliases**: `@core/*` for core module, `@services/*` for services
 - **Drag-and-drop**: @dnd-kit with DndContext at board level, useDroppable for columns, useSortable for cards
+- **Port isolation**: Each worktree gets a unique port to prevent conflicts when running dev servers

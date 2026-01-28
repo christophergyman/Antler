@@ -17,15 +17,7 @@ import {
   getPostOpenCommand,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
-import {
-  hasDevcontainerConfig,
-  readDevcontainerConfig,
-  saveDevcontainerConfig as saveDevcontainerConfigService,
-  getDevcontainerConfigPath,
-} from "@services/devcontainer";
-import { getDockerRuntimeStatus, onDockerRuntimeStatusChange } from "@services/dockerRuntime";
-import type { DockerRuntimeStatus } from "@services/dockerRuntime";
-import { logConfig, logDocker, logPrerequisites, logDataSync } from "@services/logging";
+import { logConfig, logDataSync } from "@services/logging";
 
 interface SettingsState {
   // Config
@@ -42,13 +34,6 @@ interface SettingsState {
   isGitHubAuthenticated: boolean | null;
   gitHubUsername: string | null;
   isCheckingAuth: boolean;
-  // Docker
-  dockerStatus: DockerRuntimeStatus;
-  isCheckingDocker: boolean;
-  // Devcontainer
-  hasDevcontainerConfig: boolean | null;
-  devcontainerConfig: string | null;
-  devcontainerConfigPath: string | null;
   // Terminal
   terminalApp: string | null;
   postOpenCommand: string | null;
@@ -66,11 +51,6 @@ export function useSettings() {
     isGitHubAuthenticated: null,
     gitHubUsername: null,
     isCheckingAuth: true,
-    dockerStatus: "unknown",
-    isCheckingDocker: true,
-    hasDevcontainerConfig: null,
-    devcontainerConfig: null,
-    devcontainerConfigPath: null,
     terminalApp: null,
     postOpenCommand: null,
   });
@@ -158,54 +138,6 @@ export function useSettings() {
     }
   }, []);
 
-  const checkDocker = useCallback(() => {
-    logDocker("debug", "Checking Docker status");
-    const status = getDockerRuntimeStatus();
-    setState((prev) => ({
-      ...prev,
-      dockerStatus: status,
-      isCheckingDocker: false,
-    }));
-    logDocker("debug", "Docker status check complete", { status });
-  }, []);
-
-  const checkDevcontainer = useCallback(async () => {
-    logPrerequisites("debug", "Checking devcontainer config");
-    const repoResult = await getCurrentRepoRoot();
-    if (repoResult.ok) {
-      const repoRoot = repoResult.value;
-      const hasConfig = await hasDevcontainerConfig(repoRoot);
-      const configPath = await getDevcontainerConfigPath(repoRoot);
-
-      if (hasConfig) {
-        const configResult = await readDevcontainerConfig(repoRoot);
-        setState((prev) => ({
-          ...prev,
-          hasDevcontainerConfig: true,
-          devcontainerConfig: configResult.ok ? configResult.value : null,
-          devcontainerConfigPath: configPath,
-        }));
-        logPrerequisites("debug", "Devcontainer config found", { configPath });
-      } else {
-        setState((prev) => ({
-          ...prev,
-          hasDevcontainerConfig: false,
-          devcontainerConfig: null,
-          devcontainerConfigPath: configPath,
-        }));
-        logPrerequisites("debug", "No devcontainer config found", { expectedPath: configPath });
-      }
-    } else {
-      setState((prev) => ({
-        ...prev,
-        hasDevcontainerConfig: null,
-        devcontainerConfig: null,
-        devcontainerConfigPath: null,
-      }));
-      logPrerequisites("debug", "No repo root, skipping devcontainer check");
-    }
-  }, []);
-
   const loadTerminalSettings = useCallback(async () => {
     logConfig("debug", "Loading terminal settings");
     const [app, command] = await Promise.all([
@@ -274,40 +206,11 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
     loadAntlerConfig();
     checkGitRepo();
     checkAuth();
-    checkDocker();
-    checkDevcontainer();
     loadTerminalSettings();
-  }, [checkConfig, loadAntlerConfig, checkGitRepo, checkAuth, checkDocker, checkDevcontainer, loadTerminalSettings]);
-
-  const saveDevcontainerConfig = useCallback(async (content: string): Promise<void> => {
-    logPrerequisites("info", "Saving devcontainer config");
-    const repoResult = await getCurrentRepoRoot();
-    if (!repoResult.ok) {
-      logPrerequisites("error", "Cannot save devcontainer config: no repository found");
-      throw new Error("No repository found");
-    }
-
-    const result = await saveDevcontainerConfigService(repoResult.value, content);
-    if (!result.ok) {
-      logPrerequisites("error", "Failed to save devcontainer config", { error: result.error.message });
-      throw new Error(result.error.message);
-    }
-
-    // Refresh devcontainer state after save
-    await checkDevcontainer();
-    logPrerequisites("info", "Devcontainer config saved successfully");
-  }, [checkDevcontainer]);
+  }, [checkConfig, loadAntlerConfig, checkGitRepo, checkAuth, loadTerminalSettings]);
 
   const revealConfig = useCallback(async () => {
     await revealConfigInFinder();
-  }, []);
-
-  // Subscribe to Docker status changes
-  useEffect(() => {
-    const unsubscribe = onDockerRuntimeStatusChange((status) => {
-      setState((prev) => ({ ...prev, dockerStatus: status, isCheckingDocker: false }));
-    });
-    return unsubscribe;
   }, []);
 
   // Initial check
@@ -318,7 +221,6 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
   return {
     ...state,
     refresh,
-    saveDevcontainerConfig,
     saveAntlerConfig,
     saveTerminalSettings,
     revealConfig,

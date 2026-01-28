@@ -18,7 +18,6 @@ import { NotificationPopover } from './components/ui/NotificationPopover';
 import { ErrorBoundary, CompactFallback } from './components/ErrorBoundary';
 import { getCachedConfig, clearConfigCache, loadConfig } from '@services/config';
 import { initLogger, shutdownLogger, logSystem, logUserAction } from '@services/logging';
-import { ensureDockerRuntime, onDockerRuntimeStatusChange } from '@services/dockerRuntime';
 
 function ActionButton({
   onClick,
@@ -229,17 +228,7 @@ export default function App() {
     initLogger();
     logSystem('info', 'App started');
 
-    // Start Docker runtime in background (non-blocking)
-    ensureDockerRuntime();
-
-    const unsubscribe = onDockerRuntimeStatusChange((status) => {
-      if (status === 'ready') {
-        logSystem('info', 'Docker runtime became ready');
-      }
-    });
-
     return () => {
-      unsubscribe();
       shutdownLogger();
     };
   }, []);
