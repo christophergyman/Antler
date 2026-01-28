@@ -18,11 +18,29 @@ import type { WorktreeSectionProps } from "./types";
 /**
  * Escapes special characters for AppleScript string literals
  */
+/**
+ * Escapes special characters for AppleScript string literals
+ */
 function escapeAppleScript(str: string): string {
   return str
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\n/g, "\\n");
+}
+
+/**
+ * Strip trailing 'claude' command from a command string when auto-prompt is enabled.
+ * This prevents conflict where a blocking 'claude' would run before the prompt is piped in.
+ * Handles: "cmd && claude", "cmd; claude", "cmd && claude ", "claude"
+ */
+function stripTrailingClaude(command: string): string {
+  // Pattern matches: && claude, ; claude, or just claude at the end (with optional whitespace)
+  const stripped = command.replace(/(\s*&&\s*claude|\s*;\s*claude|\s+claude)\s*$/i, "").trim();
+  // If the entire command was just "claude", return empty string
+  if (stripped.toLowerCase() === "claude") {
+    return "";
+  }
+  return stripped;
 }
 
 export const WorktreeSection = memo(function WorktreeSection({
@@ -73,14 +91,24 @@ export const WorktreeSection = memo(function WorktreeSection({
 
       // 1. Add post-open command first (if configured)
       if (postOpenCommand) {
-        const finalCommand = port !== null
-          ? buildCommandWithPort(postOpenCommand, port)
+        // If auto-prompt is enabled, strip any trailing 'claude' from the command
+        // to avoid conflict with our piped Claude invocation
+        const baseCommand = autoPromptClaude
+          ? stripTrailingClaude(postOpenCommand)
           : postOpenCommand;
-        commandParts.push(finalCommand);
-        logUserAction("open_terminal", "Post-open command prepared", {
-          command: finalCommand,
-          port,
-        });
+
+        if (baseCommand) {
+          const finalCommand = port !== null
+            ? buildCommandWithPort(baseCommand, port)
+            : baseCommand;
+          commandParts.push(finalCommand);
+          logUserAction("open_terminal", "Post-open command prepared", {
+            command: finalCommand,
+            originalCommand: postOpenCommand,
+            strippedClaude: baseCommand !== postOpenCommand,
+            port,
+          });
+        }
       }
 
       // 2. Add Claude command second (if enabled)
