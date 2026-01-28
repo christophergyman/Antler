@@ -9,9 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use std::thread;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 /// State for managing active PTY sessions
 pub struct PtyState {
@@ -20,9 +19,11 @@ pub struct PtyState {
 }
 
 struct PtySession {
+    #[allow(dead_code)]
     pair: PtyPair,
     #[allow(dead_code)]
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    writer: Mutex<Box<dyn Write + Send>>,
 }
 
 impl Default for PtyState {
@@ -105,7 +106,13 @@ pub async fn spawn_pty(
         .try_clone_reader()
         .map_err(|e| format!("Failed to clone reader: {}", e))?;
 
-    // Store the session
+    // Take the writer ONCE and store it for reuse
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("Failed to get writer: {}", e))?;
+
+    // Store the session with the writer
     {
         let mut sessions = state.sessions.lock();
         sessions.insert(
@@ -113,6 +120,7 @@ pub async fn spawn_pty(
             PtySession {
                 pair,
                 child,
+                writer: Mutex::new(writer),
             },
         );
     }
@@ -158,11 +166,8 @@ pub async fn write_pty(
         .get(&id)
         .ok_or_else(|| format!("PTY session {} not found", id))?;
 
-    let mut writer = session
-        .pair
-        .master
-        .take_writer()
-        .map_err(|e| format!("Failed to get writer: {}", e))?;
+    // Use the stored writer instead of taking a new one
+    let mut writer = session.writer.lock();
 
     writer
         .write_all(data.as_bytes())
