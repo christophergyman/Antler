@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card } from '@core/types/card';
 import { KanbanCard } from '../KanbanCard';
+import { stripMarkdownHeadings } from '../../utils/text';
 
 interface SortableCardProps {
   card: Card;
@@ -65,7 +66,7 @@ export const SortableCard = memo(function SortableCard({ card, onClick }: Sortab
     >
       <KanbanCard
         title={card.github.title}
-        description={card.github.body}
+        description={stripMarkdownHeadings(card.github.body)}
         labels={card.github.labels}
         hasError={card.hasError}
         isDragging={isDragging}
