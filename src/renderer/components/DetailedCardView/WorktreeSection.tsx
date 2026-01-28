@@ -65,18 +65,54 @@ export const WorktreeSection = memo(function WorktreeSection({
         return;
       }
 
-      // If there's a post-open command, use native terminal APIs to execute it
+      // Build the command(s) to execute
+      const appName = terminalApp || "Terminal";
+      const isITerm = appName.toLowerCase().includes("iterm");
+      const commandParts: string[] = [];
+      let tempFilePath: string | null = null;
+
+      // 1. Add post-open command first (if configured)
       if (postOpenCommand) {
-        // Inject PORT environment variable if we have a port assigned
         const finalCommand = port !== null
           ? buildCommandWithPort(postOpenCommand, port)
           : postOpenCommand;
+        commandParts.push(finalCommand);
+        logUserAction("open_terminal", "Post-open command prepared", {
+          command: finalCommand,
+          port,
+        });
+      }
 
-        const appName = terminalApp || "Terminal";
-        const isITerm = appName.toLowerCase().includes("iterm");
-        const escapedCommand = escapeAppleScript(finalCommand);
+      // 2. Add Claude command second (if enabled)
+      if (autoPromptClaude && githubInfo && githubInfo.issueNumber !== null) {
+        logUserAction("open_terminal", "Auto-prompting Claude with issue context", {
+          issueNumber: githubInfo.issueNumber,
+        });
 
-        // Use native terminal APIs instead of unreliable keystroke simulation
+        try {
+          // Format the issue as a Claude prompt
+          const prompt = formatIssueAsClaudePrompt(githubInfo);
+
+          // Write prompt to temp file (avoids escaping issues with special characters)
+          const tmpDir = await tempDir();
+          tempFilePath = `${tmpDir}/claude-prompt-${Date.now()}.md`;
+          await writeTextFile(tempFilePath, prompt);
+
+          // Build the Claude command that reads from temp file and cleans up
+          const claudeCommand = `cat "${tempFilePath}" | claude --print && rm "${tempFilePath}"`;
+          commandParts.push(claudeCommand);
+        } catch (claudeError) {
+          const message = claudeError instanceof Error ? claudeError.message : String(claudeError);
+          logUserAction("open_terminal", "Error setting up Claude prompt", { error: message });
+        }
+      }
+
+      // 3. Execute combined command (if any)
+      if (commandParts.length > 0) {
+        // Chain commands with && so they run sequentially
+        const combinedCommand = commandParts.join(" && ");
+        const escapedCommand = escapeAppleScript(combinedCommand);
+
         const script = isITerm
           ? `tell application "iTerm"
                activate
@@ -93,79 +129,27 @@ export const WorktreeSection = memo(function WorktreeSection({
         const osascriptResult = await executeOsascript(["-e", script]);
         if (osascriptResult.ok) {
           logUserAction("open_terminal", "Command executed via native terminal API", {
-            command: finalCommand,
+            command: combinedCommand,
             app: appName,
             isITerm,
             port,
+            hasClaudePrompt: tempFilePath !== null,
           });
         } else {
           logUserAction("open_terminal", "Terminal command execution failed", {
-            command: finalCommand,
+            command: combinedCommand,
             app: appName,
             isITerm,
             error: osascriptResult.error.message,
           });
-        }
-      }
-
-      // If auto-prompt Claude is enabled, invoke Claude with the issue context
-      if (autoPromptClaude && githubInfo && githubInfo.issueNumber !== null) {
-        logUserAction("open_terminal", "Auto-prompting Claude with issue context", {
-          issueNumber: githubInfo.issueNumber,
-        });
-
-        try {
-          // Format the issue as a Claude prompt
-          const prompt = formatIssueAsClaudePrompt(githubInfo);
-
-          // Write prompt to temp file (avoids escaping issues with special characters)
-          const tmpDir = await tempDir();
-          const tempFilePath = `${tmpDir}/claude-prompt-${Date.now()}.md`;
-          await writeTextFile(tempFilePath, prompt);
-
-          // Build the Claude command that reads from temp file and cleans up
-          const claudeCommand = `cat "${tempFilePath}" | claude --print && rm "${tempFilePath}"`;
-          const escapedClaudeCommand = escapeAppleScript(claudeCommand);
-
-          const appName = terminalApp || "Terminal";
-          const isITerm = appName.toLowerCase().includes("iterm");
-
-          // Small delay to let the terminal settle after previous command
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          const claudeScript = isITerm
-            ? `tell application "iTerm"
-                 activate
-                 set currentSession to current session of current window
-                 tell currentSession
-                   write text "${escapedClaudeCommand}"
-                 end tell
-               end tell`
-            : `tell application "Terminal"
-                 activate
-                 do script "${escapedClaudeCommand}" in front window
-               end tell`;
-
-          const claudeResult = await executeOsascript(["-e", claudeScript]);
-          if (claudeResult.ok) {
-            logUserAction("open_terminal", "Claude invoked with issue context", {
-              issueNumber: githubInfo.issueNumber,
-              tempFile: tempFilePath,
-            });
-          } else {
-            // Clean up temp file on failure
+          // Clean up temp file on failure
+          if (tempFilePath) {
             try {
               await remove(tempFilePath);
             } catch {
               // Ignore cleanup errors
             }
-            logUserAction("open_terminal", "Failed to invoke Claude", {
-              error: claudeResult.error.message,
-            });
           }
-        } catch (claudeError) {
-          const message = claudeError instanceof Error ? claudeError.message : String(claudeError);
-          logUserAction("open_terminal", "Error setting up Claude prompt", { error: message });
         }
       }
 
