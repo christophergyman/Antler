@@ -42,7 +42,7 @@ export function useTerminal({
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"MesloLGS NF", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
       theme: {
         background: "#1e1e1e",
         foreground: "#d4d4d4",
