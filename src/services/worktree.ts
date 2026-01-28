@@ -44,6 +44,22 @@ export function generateBranchName(issueNumber: number, title: string): string {
 }
 
 /**
+ * Parse issue number from a branch name
+ * Expects format: {issueNumber}-{anything}
+ * Example: "42-fix-login-bug" -> 42
+ *
+ * Returns null if branch name doesn't match the expected pattern
+ */
+export function parseIssueNumberFromBranch(branchName: string): number | null {
+  // Match pattern: digits followed by a hyphen at the start
+  const match = branchName.match(/^(\d+)-/);
+  if (!match) return null;
+
+  const issueNumber = parseInt(match[1], 10);
+  return isNaN(issueNumber) ? null : issueNumber;
+}
+
+/**
  * Get the worktree path for a given branch name
  */
 export function getWorktreePath(repoRoot: string, branchName: string): string {
