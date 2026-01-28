@@ -16,6 +16,7 @@ import {
   getTerminalApp,
   getPostOpenCommand,
   getAutoPromptClaude,
+  getClaudeStartupDelay,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import { logConfig, logDataSync } from "@services/logging";
@@ -39,6 +40,7 @@ interface SettingsState {
   terminalApp: string | null;
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
+  claudeStartupDelay: number | null;
 }
 
 export function useSettings() {
@@ -56,6 +58,7 @@ export function useSettings() {
     terminalApp: null,
     postOpenCommand: null,
     autoPromptClaude: null,
+    claudeStartupDelay: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -143,22 +146,24 @@ export function useSettings() {
 
   const loadTerminalSettings = useCallback(async () => {
     logConfig("debug", "Loading terminal settings");
-    const [app, command, autoPrompt] = await Promise.all([
+    const [app, command, autoPrompt, startupDelay] = await Promise.all([
       getTerminalApp(),
       getPostOpenCommand(),
       getAutoPromptClaude(),
+      getClaudeStartupDelay(),
     ]);
     setState((prev) => ({
       ...prev,
       terminalApp: app,
       postOpenCommand: command,
       autoPromptClaude: autoPrompt,
+      claudeStartupDelay: startupDelay,
     }));
-    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt });
+    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt, claudeStartupDelay: startupDelay });
   }, []);
 
-  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean): Promise<void> => {
-    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude });
+  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number): Promise<void> => {
+    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude, claudeStartupDelay });
 
     // Load current config content and update it
     const contentResult = await getConfigContent();
@@ -169,7 +174,7 @@ export function useSettings() {
       const newContent = `github:
   repository: ""
 ${hasTerminalSettings ? `terminal:
-${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}` : ""}`;
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== 2500 ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}` : ""}`;
       await saveConfigContent(newContent);
     } else {
       // Parse and update existing config
@@ -185,6 +190,8 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
             ...(app && { app }),
             ...(command && { postOpenCommand: command }),
             ...(autoPromptClaude && { autoPromptClaude }),
+            // Only save delay if auto-prompt is enabled and it's not the default
+            ...(autoPromptClaude && claudeStartupDelay !== 2500 && { claudeStartupDelay }),
           };
         } else {
           delete parsed.terminal;

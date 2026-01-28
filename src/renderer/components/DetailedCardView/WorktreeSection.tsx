@@ -7,17 +7,12 @@ import { memo, useState, useCallback } from "react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { executeOpen, executeOsascript } from "@services/commandExecutor";
-import { getTerminalApp, getPostOpenCommand, getAutoPromptClaude } from "@services/config";
+import { getTerminalApp, getPostOpenCommand, getAutoPromptClaude, getClaudeStartupDelay } from "@services/config";
 import { buildCommandWithPort } from "@services/port";
 import { logUserAction, logPerformance } from "@services/logging";
 import { formatIssueAsClaudePrompt } from "@services/claudePrompt";
-import { writeTextFile, remove } from "@tauri-apps/plugin-fs";
-import { tempDir } from "@tauri-apps/api/path";
 import type { WorktreeSectionProps } from "./types";
 
-/**
- * Escapes special characters for AppleScript string literals
- */
 /**
  * Escapes special characters for AppleScript string literals
  */
@@ -59,10 +54,11 @@ export const WorktreeSection = memo(function WorktreeSection({
     logUserAction("open_terminal", "Opening terminal at worktree", { path: worktreePath, port });
 
     try {
-      const [terminalApp, postOpenCommand, autoPromptClaude] = await Promise.all([
+      const [terminalApp, postOpenCommand, autoPromptClaude, claudeStartupDelay] = await Promise.all([
         getTerminalApp(),
         getPostOpenCommand(),
         getAutoPromptClaude(),
+        getClaudeStartupDelay(),
       ]);
 
       // Build open command args
@@ -83,17 +79,38 @@ export const WorktreeSection = memo(function WorktreeSection({
         return;
       }
 
-      // Build the command(s) to execute
       const appName = terminalApp || "Terminal";
       const isITerm = appName.toLowerCase().includes("iterm");
-      const commandParts: string[] = [];
-      let tempFilePath: string | null = null;
+      const shouldAutoPrompt = autoPromptClaude && githubInfo && githubInfo.issueNumber !== null;
+      let promptContent: string | null = null;
 
-      // 1. Add post-open command first (if configured)
+      // Prepare the prompt content if auto-prompt is enabled
+      if (shouldAutoPrompt) {
+        promptContent = formatIssueAsClaudePrompt(githubInfo);
+        logUserAction("open_terminal", "Auto-prompting Claude with issue context", {
+          issueNumber: githubInfo.issueNumber,
+          promptLength: promptContent.length,
+        });
+
+        // Phase 1: Copy prompt to clipboard using AppleScript
+        const escapedPrompt = escapeAppleScript(promptContent);
+        const clipboardScript = `set the clipboard to "${escapedPrompt}"`;
+        const clipboardResult = await executeOsascript(["-e", clipboardScript]);
+        if (!clipboardResult.ok) {
+          logUserAction("open_terminal", "Failed to copy prompt to clipboard", {
+            error: clipboardResult.error.message,
+          });
+          promptContent = null; // Skip auto-prompt on failure
+        }
+      }
+
+      // Phase 2: Build and execute the terminal command
+      const commandParts: string[] = [];
+
+      // Add post-open command (if configured)
       if (postOpenCommand) {
         // If auto-prompt is enabled, strip any trailing 'claude' from the command
-        // to avoid conflict with our piped Claude invocation
-        const baseCommand = autoPromptClaude
+        const baseCommand = shouldAutoPrompt
           ? stripTrailingClaude(postOpenCommand)
           : postOpenCommand;
 
@@ -111,33 +128,13 @@ export const WorktreeSection = memo(function WorktreeSection({
         }
       }
 
-      // 2. Add Claude command second (if enabled)
-      if (autoPromptClaude && githubInfo && githubInfo.issueNumber !== null) {
-        logUserAction("open_terminal", "Auto-prompting Claude with issue context", {
-          issueNumber: githubInfo.issueNumber,
-        });
-
-        try {
-          // Format the issue as a Claude prompt
-          const prompt = formatIssueAsClaudePrompt(githubInfo);
-
-          // Write prompt to temp file (avoids escaping issues with special characters)
-          const tmpDir = await tempDir();
-          tempFilePath = `${tmpDir}/claude-prompt-${Date.now()}.md`;
-          await writeTextFile(tempFilePath, prompt);
-
-          // Build the Claude command that reads from temp file and cleans up
-          const claudeCommand = `cat "${tempFilePath}" | claude --print && rm "${tempFilePath}"`;
-          commandParts.push(claudeCommand);
-        } catch (claudeError) {
-          const message = claudeError instanceof Error ? claudeError.message : String(claudeError);
-          logUserAction("open_terminal", "Error setting up Claude prompt", { error: message });
-        }
+      // Add claude command if auto-prompt is enabled
+      if (promptContent) {
+        commandParts.push("claude");
       }
 
-      // 3. Execute combined command (if any)
+      // Execute the command in terminal
       if (commandParts.length > 0) {
-        // Chain commands with && so they run sequentially
         const combinedCommand = commandParts.join(" && ");
         const escapedCommand = escapeAppleScript(combinedCommand);
 
@@ -161,7 +158,6 @@ export const WorktreeSection = memo(function WorktreeSection({
             app: appName,
             isITerm,
             port,
-            hasClaudePrompt: tempFilePath !== null,
           });
         } else {
           logUserAction("open_terminal", "Terminal command execution failed", {
@@ -170,14 +166,45 @@ export const WorktreeSection = memo(function WorktreeSection({
             isITerm,
             error: osascriptResult.error.message,
           });
-          // Clean up temp file on failure
-          if (tempFilePath) {
-            try {
-              await remove(tempFilePath);
-            } catch {
-              // Ignore cleanup errors
-            }
-          }
+        }
+      }
+
+      // Phase 3: If auto-prompt, wait for Claude to initialize then paste and submit
+      if (promptContent) {
+        logUserAction("open_terminal", "Waiting for Claude to initialize", {
+          delayMs: claudeStartupDelay,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, claudeStartupDelay));
+
+        // Phase 4: Paste from clipboard (Cmd+V) and submit (Enter)
+        const pasteScript = isITerm
+          ? `tell application "iTerm"
+               activate
+               tell application "System Events"
+                 keystroke "v" using command down
+                 delay 0.1
+                 keystroke return
+               end tell
+             end tell`
+          : `tell application "Terminal"
+               activate
+               tell application "System Events"
+                 keystroke "v" using command down
+                 delay 0.1
+                 keystroke return
+               end tell
+             end tell`;
+
+        const pasteResult = await executeOsascript(["-e", pasteScript]);
+        if (pasteResult.ok) {
+          logUserAction("open_terminal", "Prompt pasted and submitted to Claude", {
+            issueNumber: githubInfo?.issueNumber,
+          });
+        } else {
+          logUserAction("open_terminal", "Failed to paste prompt", {
+            error: pasteResult.error.message,
+          });
         }
       }
 

@@ -11,18 +11,21 @@ interface TerminalSettingsSectionProps {
   terminalApp: string | null;
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
-  onSave: (app: string, command: string, autoPromptClaude: boolean) => Promise<void>;
+  claudeStartupDelay: number | null;
+  onSave: (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number) => Promise<void>;
 }
 
 export function TerminalSettingsSection({
   terminalApp,
   postOpenCommand,
   autoPromptClaude: autoPromptClaudeProp,
+  claudeStartupDelay: claudeStartupDelayProp,
   onSave,
 }: TerminalSettingsSectionProps) {
   const [app, setApp] = useState("");
   const [command, setCommand] = useState("");
   const [autoPromptClaude, setAutoPromptClaude] = useState(false);
+  const [claudeStartupDelay, setClaudeStartupDelay] = useState(2500);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -31,12 +34,14 @@ export function TerminalSettingsSection({
     setApp(terminalApp ?? "");
     setCommand(postOpenCommand ?? "");
     setAutoPromptClaude(autoPromptClaudeProp ?? false);
-  }, [terminalApp, postOpenCommand, autoPromptClaudeProp]);
+    setClaudeStartupDelay(claudeStartupDelayProp ?? 2500);
+  }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp]);
 
   const hasChanges =
     app !== (terminalApp ?? "") ||
     command !== (postOpenCommand ?? "") ||
-    autoPromptClaude !== (autoPromptClaudeProp ?? false);
+    autoPromptClaude !== (autoPromptClaudeProp ?? false) ||
+    claudeStartupDelay !== (claudeStartupDelayProp ?? 2500);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -46,15 +51,17 @@ export function TerminalSettingsSection({
       app: app || "(default)",
       hasCommand: Boolean(command),
       autoPromptClaude,
+      claudeStartupDelay,
     });
 
     try {
-      await onSave(app, command, autoPromptClaude);
+      await onSave(app, command, autoPromptClaude, claudeStartupDelay);
       setSaveSuccess(true);
       logUserAction("settings_save", "Terminal settings saved successfully", {
         app: app || "(default)",
         hasCommand: Boolean(command),
         autoPromptClaude,
+        claudeStartupDelay,
       });
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (e) {
@@ -147,6 +154,37 @@ export function TerminalSettingsSection({
           When opening terminal, automatically run Claude Code with the full GitHub issue context in plan mode
         </p>
       </div>
+
+      {/* Claude Startup Delay (shown only when auto-prompt is enabled) */}
+      {autoPromptClaude && (
+        <div className="space-y-1.5 ml-6">
+          <label
+            htmlFor="claude-startup-delay"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Claude Startup Delay (ms)
+          </label>
+          <input
+            id="claude-startup-delay"
+            type="number"
+            value={claudeStartupDelay}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (!isNaN(value) && value >= 500 && value <= 10000) {
+                setClaudeStartupDelay(value);
+                setSaveSuccess(false);
+              }
+            }}
+            min={500}
+            max={10000}
+            step={100}
+            className="w-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+          />
+          <p className="text-xs text-gray-500">
+            Time to wait for Claude to initialize before pasting the prompt (500-10000ms)
+          </p>
+        </div>
+      )}
 
       {/* Save Button */}
       <div className="flex justify-end">
