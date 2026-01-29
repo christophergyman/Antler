@@ -158,12 +158,48 @@ src-tauri/          # Minimal Rust backend
 └── capabilities/   # Permission definitions
 ```
 
+## Testing
+
+Antler has comprehensive test coverage across all layers:
+
+```bash
+# Run TypeScript tests (watch mode)
+bun test
+
+# Run TypeScript tests (single run)
+bun test:run
+
+# Run TypeScript tests with coverage
+bun test:coverage
+
+# Run Rust tests
+cd src-tauri && cargo test
+```
+
+### Test Structure
+
+| Layer | Location | Tests |
+|-------|----------|-------|
+| **Core** | `src/core/__tests__/` | Card operations, collection utilities, type factories |
+| **Services** | `src/services/__tests__/` | Config validation, worktree management, port allocation |
+| **React** | `src/renderer/components/*/__tests__/` | Component rendering and behavior |
+| **Rust** | `src-tauri/src/pty.rs` | PTY state management, serialization |
+
+### Test Stack
+
+- **Vitest** - Fast TypeScript test runner
+- **React Testing Library** - Component testing
+- **Manual Tauri Mocks** - In-memory FS and shell mocks in `src/__mocks__/`
+
 ## Scripts Reference
 
 | Script | Command | Description |
 |--------|---------|-------------|
 | `dev` | `bun run dev` | Start Tauri development with hot reload |
 | `build` | `bun run build` | Build production application |
+| `test` | `bun test` | Run TypeScript tests in watch mode |
+| `test:run` | `bun test:run` | Run TypeScript tests once |
+| `test:coverage` | `bun test:coverage` | Run tests with coverage report |
 | `vite:dev` | `bun run vite:dev` | Start Vite dev server only |
 | `vite:build` | `bun run vite:build` | Build frontend only |
 
@@ -172,6 +208,7 @@ src-tauri/          # Minimal Rust backend
 | File | Purpose |
 |------|---------|
 | `vite.config.ts` | Vite build configuration with path aliases |
+| `vitest.config.ts` | Vitest test configuration |
 | `src-tauri/tauri.conf.json` | Tauri app configuration |
 | `src-tauri/capabilities/default.json` | Tauri permission definitions |
 | `tailwind.config.js` | Tailwind CSS configuration |
