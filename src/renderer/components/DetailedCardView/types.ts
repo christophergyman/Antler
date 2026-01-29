@@ -91,4 +91,5 @@ export interface WorktreeSectionProps {
   worktreeCreated: boolean;
   worktreePath: string | null;
   port: number | null;
+  githubInfo: Card["github"];
 }

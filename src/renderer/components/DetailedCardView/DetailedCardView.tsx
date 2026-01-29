@@ -340,6 +340,7 @@ export function DetailedCardView({
                   worktreeCreated={card.worktreeCreated}
                   worktreePath={card.worktreePath}
                   port={card.port}
+                  githubInfo={card.github}
                 />
               </SidebarCard>
             </div>
