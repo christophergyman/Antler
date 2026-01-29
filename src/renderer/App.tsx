@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import type { Card } from '@core/types/card';
+import type { Card, ViewType } from '@core/types';
 import { KanbanBoard } from './components/KanbanBoard';
+import { AgentView } from './components/AgentView';
 import { DotBackground } from './components/DotBackground';
 import { DetailedCardView } from './components/DetailedCardView';
 import { CreateIssueDialog } from './components/CreateIssueDialog';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
+import { useViewToggle } from './hooks/useViewToggle';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { useProjectSelector } from './hooks/useProjectSelector';
 import { Toggle } from './components/ui/toggle';
+import { SegmentedControl } from './components/ui/SegmentedControl';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ProjectSelectorDialog } from './components/ProjectSelector';
 import { NotificationProvider } from './context/NotificationContext';
@@ -72,13 +75,20 @@ function SetupGuide({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+const VIEW_OPTIONS: readonly { value: ViewType; label: string }[] = [
+  { value: "kanban", label: "Kanban" },
+  { value: "agent", label: "Agent" },
+] as const;
+
 function Header({
   isMock,
   setDataSource,
   onRefresh,
   onSettingsOpen,
   repository,
-  isRefreshing
+  isRefreshing,
+  view,
+  onViewChange,
 }: {
   isMock: boolean;
   setDataSource: (source: "mock" | "github") => void;
@@ -86,11 +96,18 @@ function Header({
   onSettingsOpen: () => void;
   repository: string | null;
   isRefreshing: boolean;
+  view: ViewType;
+  onViewChange: (view: ViewType) => void;
 }) {
   return (
     <div className="px-6 pt-6 pb-2 shrink-0 flex justify-center">
       <div className="flex items-center justify-between w-full md:max-w-[calc(4*18rem+3*1rem)]">
         <div className="flex items-center gap-4">
+          <SegmentedControl
+            options={VIEW_OPTIONS}
+            value={view}
+            onValueChange={onViewChange}
+          />
           <Toggle
             pressed={isMock}
             onPressedChange={(pressed) => setDataSource(pressed ? "mock" : "github")}
@@ -149,12 +166,14 @@ function Header({
 
 export default function App() {
   const { dataSource, setDataSource, isMock } = useDataSource();
+  const { view, setView } = useViewToggle();
   const projectSelector = useProjectSelector();
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
   const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
   const [repository, setRepository] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [selectedAgentCardId, setSelectedAgentCardId] = useState<string | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [isCreateIssueOpen, setIsCreateIssueOpen] = useState(false);
   const hasInitialized = useRef(false);
@@ -281,12 +300,22 @@ export default function App() {
             <ActionButton onClick={refresh}>Retry</ActionButton>
           </div>
         )}
-        <KanbanBoard
-          cards={cards}
-          onCardStatusChange={handleCardStatusChange}
-          onCardClick={handleCardClick}
-          onCreateIssue={!isMock && repository ? handleCreateIssue : undefined}
-        />
+        {view === "kanban" ? (
+          <KanbanBoard
+            cards={cards}
+            onCardStatusChange={handleCardStatusChange}
+            onCardClick={handleCardClick}
+            onCreateIssue={!isMock && repository ? handleCreateIssue : undefined}
+          />
+        ) : (
+          <div className="flex-1 px-6 pb-6 min-h-0">
+            <AgentView
+              cards={cards}
+              selectedCardId={selectedAgentCardId}
+              onCardSelect={setSelectedAgentCardId}
+            />
+          </div>
+        )}
       </>
     );
   };
@@ -339,6 +368,8 @@ export default function App() {
               onSettingsOpen={() => setIsSettingsOpen(true)}
               repository={repository}
               isRefreshing={isRefreshing}
+              view={view}
+              onViewChange={setView}
             />
             <ErrorBoundary
               name="KanbanBoard"

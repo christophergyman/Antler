@@ -50,9 +50,5 @@ src-tauri/target
 # Worktree port assignments
 .port
 
-# Playwright
-playwright-report
-test-results
-
 # Local config (use antler.example.yaml as template)
 antler.yaml

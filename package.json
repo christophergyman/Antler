@@ -8,13 +8,9 @@
     "vite:dev": "vite",
     "vite:build": "vite build",
     "dev": "tauri dev",
-    "build": "tauri build",
-    "test:e2e": "npx playwright test --config=e2e/playwright.config.ts",
-    "test:e2e:headed": "npx playwright test --config=e2e/playwright.config.ts --headed",
-    "test:e2e:debug": "npx playwright test --config=e2e/playwright.config.ts --debug"
+    "build": "tauri build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0",
     "@tauri-apps/cli": "^2",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
@@ -47,6 +43,9 @@
     "react": "^18",
     "react-dom": "^18",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-web-links": "^0.9.0"
   }
 }
