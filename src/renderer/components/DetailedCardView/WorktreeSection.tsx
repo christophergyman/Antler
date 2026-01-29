@@ -104,6 +104,11 @@ export const WorktreeSection = memo(function WorktreeSection({
             error: clipboardResult.error.message,
           });
           promptContent = null; // Skip auto-prompt on failure
+        } else {
+          logUserAction("open_terminal", "Prompt copied to clipboard", {
+            issueNumber: githubInfo.issueNumber,
+            promptLength: promptContent.length,
+          });
         }
       }
 
