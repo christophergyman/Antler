@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { logConfig, logUserAction } from "@services/logging";
+import { DEFAULT_CLAUDE_STARTUP_DELAY } from "@services/config";
 
 interface TerminalSettingsSectionProps {
   terminalApp: string | null;
@@ -25,7 +26,7 @@ export function TerminalSettingsSection({
   const [app, setApp] = useState("");
   const [command, setCommand] = useState("");
   const [autoPromptClaude, setAutoPromptClaude] = useState(false);
-  const [claudeStartupDelay, setClaudeStartupDelay] = useState(2500);
+  const [claudeStartupDelay, setClaudeStartupDelay] = useState(DEFAULT_CLAUDE_STARTUP_DELAY);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -34,14 +35,14 @@ export function TerminalSettingsSection({
     setApp(terminalApp ?? "");
     setCommand(postOpenCommand ?? "");
     setAutoPromptClaude(autoPromptClaudeProp ?? false);
-    setClaudeStartupDelay(claudeStartupDelayProp ?? 2500);
+    setClaudeStartupDelay(claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
   }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp]);
 
   const hasChanges =
     app !== (terminalApp ?? "") ||
     command !== (postOpenCommand ?? "") ||
     autoPromptClaude !== (autoPromptClaudeProp ?? false) ||
-    claudeStartupDelay !== (claudeStartupDelayProp ?? 2500);
+    claudeStartupDelay !== (claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -170,8 +171,10 @@ export function TerminalSettingsSection({
             value={claudeStartupDelay}
             onChange={(e) => {
               const value = parseInt(e.target.value, 10);
-              if (!isNaN(value) && value >= 500 && value <= 10000) {
-                setClaudeStartupDelay(value);
+              if (!isNaN(value)) {
+                // Clamp value to valid range
+                const clamped = Math.min(10000, Math.max(500, value));
+                setClaudeStartupDelay(clamped);
                 setSaveSuccess(false);
               }
             }}

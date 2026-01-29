@@ -15,12 +15,15 @@ import type { WorktreeSectionProps } from "./types";
 
 /**
  * Escapes special characters for AppleScript string literals
+ * Handles: backslash, double quote, newline, carriage return, tab
  */
 function escapeAppleScript(str: string): string {
   return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n");
+    .replace(/\\/g, "\\\\")    // Backslash first (before other escapes add more)
+    .replace(/"/g, '\\"')       // Double quotes
+    .replace(/\n/g, "\\n")      // Newlines
+    .replace(/\r/g, "\\r")      // Carriage returns
+    .replace(/\t/g, "\\t");     // Tabs
 }
 
 /**

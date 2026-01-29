@@ -17,6 +17,7 @@ import {
   getPostOpenCommand,
   getAutoPromptClaude,
   getClaudeStartupDelay,
+  DEFAULT_CLAUDE_STARTUP_DELAY,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import { logConfig, logDataSync } from "@services/logging";
@@ -174,7 +175,7 @@ export function useSettings() {
       const newContent = `github:
   repository: ""
 ${hasTerminalSettings ? `terminal:
-${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== 2500 ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}` : ""}`;
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}` : ""}`;
       await saveConfigContent(newContent);
     } else {
       // Parse and update existing config
@@ -191,7 +192,7 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
             ...(command && { postOpenCommand: command }),
             ...(autoPromptClaude && { autoPromptClaude }),
             // Only save delay if auto-prompt is enabled and it's not the default
-            ...(autoPromptClaude && claudeStartupDelay !== 2500 && { claudeStartupDelay }),
+            ...(autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY && { claudeStartupDelay }),
           };
         } else {
           delete parsed.terminal;

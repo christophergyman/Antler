@@ -44,6 +44,13 @@ interface RawConfig {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Default delay (ms) to wait for Claude to initialize before pasting prompt */
+export const DEFAULT_CLAUDE_STARTUP_DELAY = 2500;
+
+// ============================================================================
 // Validation
 // ============================================================================
 
@@ -580,15 +587,15 @@ export async function getAutoPromptClaude(): Promise<boolean> {
 /**
  * Get the Claude startup delay setting
  * Time in milliseconds to wait for Claude to initialize before pasting the prompt
- * Returns 2500ms as default if not configured
+ * Returns DEFAULT_CLAUDE_STARTUP_DELAY if not configured
  */
 export async function getClaudeStartupDelay(): Promise<number> {
   const result = await getCachedConfig();
   if (!result.ok) {
     logConfig("debug", "Failed to get Claude startup delay - config unavailable");
-    return 2500;
+    return DEFAULT_CLAUDE_STARTUP_DELAY;
   }
-  const delay = result.value.terminal?.claudeStartupDelay ?? 2500;
+  const delay = result.value.terminal?.claudeStartupDelay ?? DEFAULT_CLAUDE_STARTUP_DELAY;
   logConfig("debug", "Retrieved Claude startup delay setting", { delay });
   return delay;
 }
