@@ -893,15 +893,14 @@ function parseYamlTemplate(content: string): {
  */
 function extractYamlValue(block: string, fieldName: string): string | undefined {
   const lines = block.split("\n");
-
-  // Find the line containing the field
-  let fieldLineIndex = -1;
   let fieldIndent = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(new RegExp(`^(\\s*)${fieldName}:\\s*(.*)$`));
-    if (match) {
-      fieldLineIndex = i;
+    const currentLine = lines[i];
+    if (!currentLine) continue;
+
+    const match = currentLine.match(new RegExp(`^(\\s*)${fieldName}:\\s*(.*)$`));
+    if (match && match[1] !== undefined && match[2] !== undefined) {
       fieldIndent = match[1].length;
       const inlineValue = match[2].trim();
 
@@ -913,6 +912,7 @@ function extractYamlValue(block: string, fieldName: string): string | undefined 
 
         for (let j = i + 1; j < lines.length; j++) {
           const line = lines[j];
+          if (line === undefined) continue;
 
           // Empty lines are preserved in block scalars
           if (line.trim() === "") {
@@ -922,7 +922,7 @@ function extractYamlValue(block: string, fieldName: string): string | undefined 
 
           // Check indentation - content must be more indented than the field
           const lineIndentMatch = line.match(/^(\s*)/);
-          const lineIndent = lineIndentMatch ? lineIndentMatch[1].length : 0;
+          const lineIndent = lineIndentMatch?.[1]?.length ?? 0;
 
           // If line is not more indented than field, we've reached the end
           if (lineIndent <= fieldIndent) {
@@ -943,7 +943,7 @@ function extractYamlValue(block: string, fieldName: string): string | undefined 
 
       // Check if it's a quoted inline value
       if (inlineValue.startsWith('"') || inlineValue.startsWith("'")) {
-        const quote = inlineValue[0];
+        const quote = inlineValue[0] as string;
         const endQuote = inlineValue.lastIndexOf(quote);
         if (endQuote > 0) {
           return inlineValue.slice(1, endQuote);
