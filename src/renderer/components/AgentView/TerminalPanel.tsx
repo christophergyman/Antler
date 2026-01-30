@@ -1,6 +1,7 @@
 import { memo, useState, useEffect } from "react";
 import type { Card } from "@core/types";
 import { TerminalContainer } from "./TerminalContainer";
+import { getTerminalCols, getTerminalRows, DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS } from "@services/config";
 
 interface TerminalPanelProps {
   selectedCard: Card | null;
@@ -11,6 +12,18 @@ export const TerminalPanel = memo(function TerminalPanel({
 }: TerminalPanelProps) {
   // Track cards that have been viewed (to keep their terminals alive)
   const [viewedCards, setViewedCards] = useState<Map<string, Card>>(new Map());
+
+  // Terminal dimension settings
+  const [terminalCols, setTerminalCols] = useState<number>(DEFAULT_TERMINAL_COLS);
+  const [terminalRows, setTerminalRows] = useState<number>(DEFAULT_TERMINAL_ROWS);
+
+  // Load terminal dimensions from config on mount
+  useEffect(() => {
+    Promise.all([getTerminalCols(), getTerminalRows()]).then(([cols, rows]) => {
+      setTerminalCols(cols);
+      setTerminalRows(rows);
+    });
+  }, []);
 
   // Add selected card to viewed cards when it changes
   useEffect(() => {
@@ -68,6 +81,8 @@ export const TerminalPanel = memo(function TerminalPanel({
           <TerminalContainer
             card={card}
             isVisible={card.sessionUid === selectedCard.sessionUid}
+            terminalCols={terminalCols}
+            terminalRows={terminalRows}
           />
         </div>
       ))}

@@ -17,7 +17,11 @@ import {
   getPostOpenCommand,
   getAutoPromptClaude,
   getClaudeStartupDelay,
+  getTerminalCols,
+  getTerminalRows,
   DEFAULT_CLAUDE_STARTUP_DELAY,
+  DEFAULT_TERMINAL_COLS,
+  DEFAULT_TERMINAL_ROWS,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
 import { logConfig, logDataSync } from "@services/logging";
@@ -42,6 +46,8 @@ interface SettingsState {
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
   claudeStartupDelay: number | null;
+  terminalCols: number | null;
+  terminalRows: number | null;
 }
 
 export function useSettings() {
@@ -60,6 +66,8 @@ export function useSettings() {
     postOpenCommand: null,
     autoPromptClaude: null,
     claudeStartupDelay: null,
+    terminalCols: null,
+    terminalRows: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -147,11 +155,13 @@ export function useSettings() {
 
   const loadTerminalSettings = useCallback(async () => {
     logConfig("debug", "Loading terminal settings");
-    const [app, command, autoPrompt, startupDelay] = await Promise.all([
+    const [app, command, autoPrompt, startupDelay, cols, rows] = await Promise.all([
       getTerminalApp(),
       getPostOpenCommand(),
       getAutoPromptClaude(),
       getClaudeStartupDelay(),
+      getTerminalCols(),
+      getTerminalRows(),
     ]);
     setState((prev) => ({
       ...prev,
@@ -159,23 +169,26 @@ export function useSettings() {
       postOpenCommand: command,
       autoPromptClaude: autoPrompt,
       claudeStartupDelay: startupDelay,
+      terminalCols: cols,
+      terminalRows: rows,
     }));
-    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt, claudeStartupDelay: startupDelay });
+    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt, claudeStartupDelay: startupDelay, cols, rows });
   }, []);
 
-  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number): Promise<void> => {
-    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude, claudeStartupDelay });
+  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number, cols: number, rows: number): Promise<void> => {
+    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude, claudeStartupDelay, cols, rows });
 
     // Load current config content and update it
     const contentResult = await getConfigContent();
     if (!contentResult.ok) {
       // Create new config with terminal settings
       logConfig("debug", "Config file does not exist, creating new config");
-      const hasTerminalSettings = app || command || autoPromptClaude;
+      const hasNonDefaultDimensions = cols !== DEFAULT_TERMINAL_COLS || rows !== DEFAULT_TERMINAL_ROWS;
+      const hasTerminalSettings = app || command || autoPromptClaude || hasNonDefaultDimensions;
       const newContent = `github:
   repository: ""
 ${hasTerminalSettings ? `terminal:
-${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}` : ""}`;
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}${cols !== DEFAULT_TERMINAL_COLS ? `  terminalCols: ${cols}\n` : ""}${rows !== DEFAULT_TERMINAL_ROWS ? `  terminalRows: ${rows}\n` : ""}` : ""}`;
       await saveConfigContent(newContent);
     } else {
       // Parse and update existing config
@@ -185,7 +198,8 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
         const parsed = load(contentResult.value) as Record<string, unknown>;
 
         // Update terminal section
-        const hasTerminalSettings = app || command || autoPromptClaude;
+        const hasNonDefaultDimensions = cols !== DEFAULT_TERMINAL_COLS || rows !== DEFAULT_TERMINAL_ROWS;
+        const hasTerminalSettings = app || command || autoPromptClaude || hasNonDefaultDimensions;
         if (hasTerminalSettings) {
           parsed.terminal = {
             ...(app && { app }),
@@ -193,6 +207,9 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
             ...(autoPromptClaude && { autoPromptClaude }),
             // Only save delay if auto-prompt is enabled and it's not the default
             ...(autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY && { claudeStartupDelay }),
+            // Only save dimensions if they differ from defaults
+            ...(cols !== DEFAULT_TERMINAL_COLS && { terminalCols: cols }),
+            ...(rows !== DEFAULT_TERMINAL_ROWS && { terminalRows: rows }),
           };
         } else {
           delete parsed.terminal;

@@ -6,6 +6,8 @@ import { Badge } from "../ui/badge";
 interface TerminalContainerProps {
   card: Card;
   isVisible: boolean;
+  terminalCols?: number;
+  terminalRows?: number;
 }
 
 const STATUS_COLORS = {
@@ -18,11 +20,15 @@ const STATUS_COLORS = {
 export const TerminalContainer = memo(function TerminalContainer({
   card,
   isVisible,
+  terminalCols,
+  terminalRows,
 }: TerminalContainerProps) {
-  const { containerRef, status, error } = useTerminal({
+  const { containerRef, terminalMountRef, status, error, scale } = useTerminal({
     worktreePath: card.worktreePath ?? "",
     port: card.port,
     autoStart: true,
+    cols: terminalCols,
+    rows: terminalRows,
   });
 
   const issueNumber = card.github.issueNumber;
@@ -61,12 +67,21 @@ export const TerminalContainer = memo(function TerminalContainer({
         </div>
       </div>
 
-      {/* Terminal content */}
+      {/* Terminal content - outer container for measuring available space */}
       <div
         ref={containerRef}
-        className="flex-1 min-h-0"
-        style={{ padding: "4px" }}
-      />
+        className="flex-1 min-h-0 overflow-hidden"
+      >
+        {/* Inner container where xterm mounts - gets scaled */}
+        <div
+          ref={terminalMountRef}
+          style={{
+            transformOrigin: 'top left',
+            transform: `scale(${scale})`,
+            padding: '4px',
+          }}
+        />
+      </div>
 
       {/* Error display */}
       {error && status === "error" && (

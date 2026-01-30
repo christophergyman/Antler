@@ -6,14 +6,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { logConfig, logUserAction } from "@services/logging";
-import { DEFAULT_CLAUDE_STARTUP_DELAY } from "@services/config";
+import { DEFAULT_CLAUDE_STARTUP_DELAY, DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS } from "@services/config";
 
 interface TerminalSettingsSectionProps {
   terminalApp: string | null;
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
   claudeStartupDelay: number | null;
-  onSave: (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number) => Promise<void>;
+  terminalCols: number | null;
+  terminalRows: number | null;
+  onSave: (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number, cols: number, rows: number) => Promise<void>;
 }
 
 export function TerminalSettingsSection({
@@ -21,12 +23,16 @@ export function TerminalSettingsSection({
   postOpenCommand,
   autoPromptClaude: autoPromptClaudeProp,
   claudeStartupDelay: claudeStartupDelayProp,
+  terminalCols: terminalColsProp,
+  terminalRows: terminalRowsProp,
   onSave,
 }: TerminalSettingsSectionProps) {
   const [app, setApp] = useState("");
   const [command, setCommand] = useState("");
   const [autoPromptClaude, setAutoPromptClaude] = useState(false);
   const [claudeStartupDelay, setClaudeStartupDelay] = useState(DEFAULT_CLAUDE_STARTUP_DELAY);
+  const [cols, setCols] = useState(DEFAULT_TERMINAL_COLS);
+  const [rows, setRows] = useState(DEFAULT_TERMINAL_ROWS);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -36,13 +42,17 @@ export function TerminalSettingsSection({
     setCommand(postOpenCommand ?? "");
     setAutoPromptClaude(autoPromptClaudeProp ?? false);
     setClaudeStartupDelay(claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
-  }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp]);
+    setCols(terminalColsProp ?? DEFAULT_TERMINAL_COLS);
+    setRows(terminalRowsProp ?? DEFAULT_TERMINAL_ROWS);
+  }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp, terminalColsProp, terminalRowsProp]);
 
   const hasChanges =
     app !== (terminalApp ?? "") ||
     command !== (postOpenCommand ?? "") ||
     autoPromptClaude !== (autoPromptClaudeProp ?? false) ||
-    claudeStartupDelay !== (claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
+    claudeStartupDelay !== (claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY) ||
+    cols !== (terminalColsProp ?? DEFAULT_TERMINAL_COLS) ||
+    rows !== (terminalRowsProp ?? DEFAULT_TERMINAL_ROWS);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -53,16 +63,20 @@ export function TerminalSettingsSection({
       hasCommand: Boolean(command),
       autoPromptClaude,
       claudeStartupDelay,
+      cols,
+      rows,
     });
 
     try {
-      await onSave(app, command, autoPromptClaude, claudeStartupDelay);
+      await onSave(app, command, autoPromptClaude, claudeStartupDelay, cols, rows);
       setSaveSuccess(true);
       logUserAction("settings_save", "Terminal settings saved successfully", {
         app: app || "(default)",
         hasCommand: Boolean(command),
         autoPromptClaude,
         claudeStartupDelay,
+        cols,
+        rows,
       });
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (e) {
@@ -188,6 +202,52 @@ export function TerminalSettingsSection({
           </p>
         </div>
       )}
+
+      {/* Terminal Dimensions */}
+      <div className="space-y-1.5">
+        <label className="block text-sm font-medium text-gray-700">
+          Agent Terminal Dimensions
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            id="terminal-cols"
+            type="number"
+            value={cols}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (!isNaN(value)) {
+                const clamped = Math.min(200, Math.max(40, value));
+                setCols(clamped);
+                setSaveSuccess(false);
+              }
+            }}
+            min={40}
+            max={200}
+            className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+          />
+          <span className="text-gray-500">×</span>
+          <input
+            id="terminal-rows"
+            type="number"
+            value={rows}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (!isNaN(value)) {
+                const clamped = Math.min(100, Math.max(10, value));
+                setRows(clamped);
+                setSaveSuccess(false);
+              }
+            }}
+            min={10}
+            max={100}
+            className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+          />
+          <span className="text-xs text-gray-500">columns × rows</span>
+        </div>
+        <p className="text-xs text-gray-500">
+          Fixed terminal size for the Agent view (default: 80×24). Scales to fit when window is smaller.
+        </p>
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end">

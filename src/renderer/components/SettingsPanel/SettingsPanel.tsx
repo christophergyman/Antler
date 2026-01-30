@@ -131,6 +131,8 @@ export function SettingsPanel({ isOpen, onClose, onConfigChange }: SettingsPanel
               postOpenCommand={settings.postOpenCommand}
               autoPromptClaude={settings.autoPromptClaude}
               claudeStartupDelay={settings.claudeStartupDelay}
+              terminalCols={settings.terminalCols}
+              terminalRows={settings.terminalRows}
               onSave={settings.saveTerminalSettings}
             />
           </SettingsGroup>

@@ -24,6 +24,8 @@ export interface TerminalSettings {
   readonly postOpenCommand?: string; // e.g., "bun run dev"
   readonly autoPromptClaude?: boolean; // Auto-prompt Claude with issue context when opening terminal
   readonly claudeStartupDelay?: number; // Milliseconds to wait for Claude to initialize before pasting prompt
+  readonly terminalCols?: number;  // Fixed terminal columns for agent view (default: 80)
+  readonly terminalRows?: number;  // Fixed terminal rows for agent view (default: 24)
 }
 
 export interface AntlerConfig {
@@ -40,6 +42,8 @@ interface RawConfig {
     postOpenCommand?: unknown;
     autoPromptClaude?: unknown;
     claudeStartupDelay?: unknown;
+    terminalCols?: unknown;
+    terminalRows?: unknown;
   };
 }
 
@@ -49,6 +53,10 @@ interface RawConfig {
 
 /** Default delay (ms) to wait for Claude to initialize before pasting prompt */
 export const DEFAULT_CLAUDE_STARTUP_DELAY = 2500;
+
+/** Default terminal dimensions for agent view */
+export const DEFAULT_TERMINAL_COLS = 80;
+export const DEFAULT_TERMINAL_ROWS = 24;
 
 // ============================================================================
 // Validation
@@ -65,7 +73,7 @@ function validateTerminalSettings(terminal: unknown): TerminalSettings | undefin
     return undefined;
   }
   const t = terminal as RawConfig["terminal"];
-  const result: { app?: string; postOpenCommand?: string; autoPromptClaude?: boolean; claudeStartupDelay?: number } = {};
+  const result: { app?: string; postOpenCommand?: string; autoPromptClaude?: boolean; claudeStartupDelay?: number; terminalCols?: number; terminalRows?: number } = {};
 
   if (t?.app !== undefined && typeof t.app === "string" && t.app.trim()) {
     result.app = t.app.trim();
@@ -78,6 +86,12 @@ function validateTerminalSettings(terminal: unknown): TerminalSettings | undefin
   }
   if (t?.claudeStartupDelay !== undefined && typeof t.claudeStartupDelay === "number" && t.claudeStartupDelay >= 500 && t.claudeStartupDelay <= 10000) {
     result.claudeStartupDelay = t.claudeStartupDelay;
+  }
+  if (t?.terminalCols !== undefined && typeof t.terminalCols === "number" && t.terminalCols >= 40 && t.terminalCols <= 200) {
+    result.terminalCols = t.terminalCols;
+  }
+  if (t?.terminalRows !== undefined && typeof t.terminalRows === "number" && t.terminalRows >= 10 && t.terminalRows <= 100) {
+    result.terminalRows = t.terminalRows;
   }
 
   return Object.keys(result).length > 0 ? Object.freeze(result) : undefined;
@@ -598,4 +612,34 @@ export async function getClaudeStartupDelay(): Promise<number> {
   const delay = result.value.terminal?.claudeStartupDelay ?? DEFAULT_CLAUDE_STARTUP_DELAY;
   logConfig("debug", "Retrieved Claude startup delay setting", { delay });
   return delay;
+}
+
+/**
+ * Get the terminal columns setting for agent view
+ * Returns DEFAULT_TERMINAL_COLS if not configured
+ */
+export async function getTerminalCols(): Promise<number> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get terminal cols - config unavailable");
+    return DEFAULT_TERMINAL_COLS;
+  }
+  const cols = result.value.terminal?.terminalCols ?? DEFAULT_TERMINAL_COLS;
+  logConfig("debug", "Retrieved terminal cols setting", { cols });
+  return cols;
+}
+
+/**
+ * Get the terminal rows setting for agent view
+ * Returns DEFAULT_TERMINAL_ROWS if not configured
+ */
+export async function getTerminalRows(): Promise<number> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get terminal rows - config unavailable");
+    return DEFAULT_TERMINAL_ROWS;
+  }
+  const rows = result.value.terminal?.terminalRows ?? DEFAULT_TERMINAL_ROWS;
+  logConfig("debug", "Retrieved terminal rows setting", { rows });
+  return rows;
 }
