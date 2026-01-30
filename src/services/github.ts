@@ -969,8 +969,9 @@ function extractYamlValue(block: string, fieldName: string): string | undefined 
 function convertYamlBodyToMarkdown(yamlContent: string): string {
   const markdownParts: string[] = [];
 
-  // Find the body section
-  const bodyMatch = yamlContent.match(/^body:\s*\n([\s\S]*?)(?=^[a-z]+:|$)/m);
+  // Find the body section - capture everything after "body:" to end of content
+  // The body section is typically the last section in YAML issue templates
+  const bodyMatch = yamlContent.match(/^body:\s*\n([\s\S]*)$/m);
   if (!bodyMatch?.[1]) {
     return "";
   }
