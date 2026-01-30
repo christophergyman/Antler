@@ -3,7 +3,7 @@
  * Modal for creating new GitHub issues with template support
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -37,6 +37,7 @@ export function CreateIssueDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createMore, setCreateMore] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch templates and repo metadata
   const { templates, isLoading: isLoadingTemplates } = useIssueTemplates(repo, isOpen);
@@ -64,12 +65,29 @@ export function CreateIssueDialog({
     }
   }, [isOpen, repo]);
 
-  // Clear success message when user starts editing
+  // Clear success message when user starts editing any field
   useEffect(() => {
-    if (successMessage && formState.title) {
-      setSuccessMessage(null);
+    if (successMessage) {
+      const hasContent =
+        formState.title ||
+        formState.body ||
+        formState.labels.length > 0 ||
+        formState.assignees.length > 0 ||
+        formState.milestone;
+      if (hasContent) {
+        setSuccessMessage(null);
+      }
     }
-  }, [formState.title, successMessage]);
+  }, [formState, successMessage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle Escape key
   useEffect(() => {
@@ -186,7 +204,10 @@ export function CreateIssueDialog({
           setSuccessMessage(`Issue #${result.value.issueNumber} created`);
 
           // Auto-dismiss success message after 3 seconds
-          setTimeout(() => setSuccessMessage(null), 3000);
+          if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+          }
+          successTimeoutRef.current = setTimeout(() => setSuccessMessage(null), 3000);
         } else {
           onClose();
         }
