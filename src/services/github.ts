@@ -918,14 +918,92 @@ function parseYamlTemplate(content: string): {
 }
 
 /**
+ * Extract a YAML field value, handling both inline values and block scalars (| or >)
+ * @param block - The YAML block to search in
+ * @param fieldName - The field name to extract (e.g., "value", "placeholder")
+ * @returns The extracted value or undefined if not found
+ */
+function extractYamlValue(block: string, fieldName: string): string | undefined {
+  const lines = block.split("\n");
+  let fieldIndent = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const currentLine = lines[i];
+    if (!currentLine) continue;
+
+    const match = currentLine.match(new RegExp(`^(\\s*)${fieldName}:\\s*(.*)$`));
+    if (match && match[1] !== undefined && match[2] !== undefined) {
+      fieldIndent = match[1].length;
+      const inlineValue = match[2].trim();
+
+      // Check if it's a block scalar indicator
+      if (inlineValue === "|" || inlineValue === ">") {
+        // Block scalar - collect indented lines that follow
+        const contentLines: string[] = [];
+        let contentIndent: number | null = null;
+
+        for (let j = i + 1; j < lines.length; j++) {
+          const line = lines[j];
+          if (line === undefined) continue;
+
+          // Empty lines are preserved in block scalars
+          if (line.trim() === "") {
+            contentLines.push("");
+            continue;
+          }
+
+          // Check indentation - content must be more indented than the field
+          const lineIndentMatch = line.match(/^(\s*)/);
+          const lineIndent = lineIndentMatch?.[1]?.length ?? 0;
+
+          // If line is not more indented than field, we've reached the end
+          if (lineIndent <= fieldIndent) {
+            break;
+          }
+
+          // Set content indentation from first content line
+          if (contentIndent === null) {
+            contentIndent = lineIndent;
+          }
+
+          // Remove the common indentation
+          contentLines.push(line.slice(contentIndent));
+        }
+
+        return contentLines.join("\n").trim();
+      }
+
+      // Check if it's a quoted inline value
+      if (inlineValue.startsWith('"') || inlineValue.startsWith("'")) {
+        const quote = inlineValue[0] as string;
+        const endQuote = inlineValue.lastIndexOf(quote);
+        if (endQuote > 0) {
+          return inlineValue.slice(1, endQuote);
+        }
+      }
+
+      // Plain inline value
+      if (inlineValue) {
+        return inlineValue;
+      }
+
+      break;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Convert YAML body array to markdown format
  * Handles: markdown, input, textarea, dropdown, checkboxes
  */
 function convertYamlBodyToMarkdown(yamlContent: string): string {
   const markdownParts: string[] = [];
 
-  // Find the body section
-  const bodyMatch = yamlContent.match(/^body:\s*\n([\s\S]*?)(?=^[a-z]+:|$)/m);
+  // Find the body section - capture everything after "body:" to end of content
+  // The body section is typically the last section in YAML issue templates
+  const bodyMatch = yamlContent.match(/^body:\s*\n([\s\S]*)$/m);
   if (!bodyMatch?.[1]) {
     return "";
   }
@@ -942,16 +1020,11 @@ function convertYamlBodyToMarkdown(yamlContent: string): string {
 
     const type = typeMatch[1];
 
-    // Parse attributes
-    const labelMatch = block.match(/label:\s*["']?(.+?)["']?\s*$/m);
-    const descMatch = block.match(/description:\s*["']?(.+?)["']?\s*$/m);
-    const placeholderMatch = block.match(/placeholder:\s*["']?([\s\S]*?)["']?\s*(?=\n\s*\w+:|$)/m);
-    const valueMatch = block.match(/value:\s*["']?([\s\S]*?)["']?\s*(?=\n\s*\w+:|$)/m);
-
-    const label = labelMatch?.[1]?.trim();
-    const description = descMatch?.[1]?.trim();
-    const placeholder = placeholderMatch?.[1]?.trim();
-    const value = valueMatch?.[1]?.trim();
+    // Parse attributes using the helper for block scalar support
+    const label = extractYamlValue(block, "label");
+    const description = extractYamlValue(block, "description");
+    const placeholder = extractYamlValue(block, "placeholder");
+    const value = extractYamlValue(block, "value");
 
     switch (type) {
       case "markdown":

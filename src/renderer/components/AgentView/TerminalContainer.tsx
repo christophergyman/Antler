@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { Card } from "@core/types";
 import { useTerminal } from "../../hooks/useTerminal";
 import { Badge } from "../ui/badge";
+import { CopyIssueButton } from "./CopyIssueButton";
 
 interface TerminalContainerProps {
   card: Card;
@@ -45,6 +46,7 @@ export const TerminalContainer = memo(function TerminalContainer({
             {issueNumber ? `#${issueNumber} - ` : ""}
             {title}
           </span>
+          <CopyIssueButton github={card.github} />
         </div>
         <div className="flex items-center gap-2">
           {card.port && (

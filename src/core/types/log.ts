@@ -51,7 +51,8 @@ export type UserActionType =
   | "settings_save"
   | "issue_created"
   | "issue_closed"
-  | "template_selected";
+  | "template_selected"
+  | "copy_issue_clipboard";
 
 // ============================================================================
 // Log Entry
