@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { Card, CardStatus } from '@core/types/card';
 import {
   setStatus,
@@ -19,13 +19,24 @@ interface UseKanbanBoardOptions {
   onCardsChange: React.Dispatch<React.SetStateAction<Card[]>>;
 }
 
+export interface PendingCloseOperation {
+  card: Card;
+  previousStatus: CardStatus;
+}
+
 interface UseKanbanBoardReturn {
   handleCardStatusChange: (cardId: string, newStatus: CardStatus) => void;
+  pendingClose: PendingCloseOperation | null;
+  confirmPendingClose: () => void;
+  cancelPendingClose: () => void;
 }
 
 export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions): UseKanbanBoardReturn {
   // Track AbortControllers per card for cancellation support
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // State for pending drag-to-done close operations
+  const [pendingClose, setPendingClose] = useState<PendingCloseOperation | null>(null);
 
   // Helper to update a single card in the cards array
   const updateCard = useCallback(
@@ -239,6 +250,7 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       // Check if this is a transition that triggers work session operations
       const isIdleToInProgress = oldStatus === 'idle' && newStatus === 'in_progress';
       const isInProgressToIdle = oldStatus === 'in_progress' && newStatus === 'idle';
+      const isDragToDone = newStatus === 'done' && card.github.state === 'open' && card.github.issueNumber !== null;
 
       // For work session operations, don't update status immediately
       // The async handlers will update the status after completion
@@ -248,6 +260,21 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
       } else if (isInProgressToIdle) {
         // Stop work session (async) - status change handled in callback
         handleStopWorkSession(card);
+      } else if (isDragToDone) {
+        // Dragging an open issue to Done - store pending close operation
+        // App.tsx will handle confirmation and close the issue
+        setPendingClose({ card, previousStatus: oldStatus });
+
+        // Optimistically move card to Done
+        onCardsChange((prevCards) =>
+          prevCards.map((c) => {
+            if (c.sessionUid !== cardId) return c;
+            if (c.hasError) {
+              return setStatus(clearError(c), 'done');
+            }
+            return setStatus(c, 'done');
+          })
+        );
       } else {
         // For other status changes (e.g., moving between waiting/done), update immediately
         onCardsChange((prevCards) =>
@@ -272,5 +299,24 @@ export function useKanbanBoard({ cards, onCardsChange }: UseKanbanBoardOptions):
     [cards, onCardsChange, handleStartWorkSession, handleStopWorkSession]
   );
 
-  return { handleCardStatusChange };
+  // Confirm the pending close operation (called after successful close)
+  const confirmPendingClose = useCallback(() => {
+    setPendingClose(null);
+  }, []);
+
+  // Cancel the pending close operation (revert card to original status)
+  const cancelPendingClose = useCallback(() => {
+    if (pendingClose) {
+      onCardsChange((prevCards) =>
+        prevCards.map((c) =>
+          c.sessionUid === pendingClose.card.sessionUid
+            ? setStatus(c, pendingClose.previousStatus)
+            : c
+        )
+      );
+      setPendingClose(null);
+    }
+  }, [pendingClose, onCardsChange]);
+
+  return { handleCardStatusChange, pendingClose, confirmPendingClose, cancelPendingClose };
 }

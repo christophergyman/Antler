@@ -51,7 +51,7 @@ export function ConfirmationDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
         <p className="text-gray-600 mb-6">{message}</p>

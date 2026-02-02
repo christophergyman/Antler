@@ -17,6 +17,7 @@ import {
   getPostOpenCommand,
   getAutoPromptClaude,
   getClaudeStartupDelay,
+  getConfirmCloseOnDragToDone,
   DEFAULT_CLAUDE_STARTUP_DELAY,
 } from "@services/config";
 import { checkGitHubAuth } from "@services/github";
@@ -42,6 +43,7 @@ interface SettingsState {
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
   claudeStartupDelay: number | null;
+  confirmCloseOnDragToDone: boolean | null;
 }
 
 export function useSettings() {
@@ -60,6 +62,7 @@ export function useSettings() {
     postOpenCommand: null,
     autoPromptClaude: null,
     claudeStartupDelay: null,
+    confirmCloseOnDragToDone: null,
   });
 
   const checkConfig = useCallback(async () => {
@@ -147,11 +150,12 @@ export function useSettings() {
 
   const loadTerminalSettings = useCallback(async () => {
     logConfig("debug", "Loading terminal settings");
-    const [app, command, autoPrompt, startupDelay] = await Promise.all([
+    const [app, command, autoPrompt, startupDelay, confirmClose] = await Promise.all([
       getTerminalApp(),
       getPostOpenCommand(),
       getAutoPromptClaude(),
       getClaudeStartupDelay(),
+      getConfirmCloseOnDragToDone(),
     ]);
     setState((prev) => ({
       ...prev,
@@ -159,23 +163,24 @@ export function useSettings() {
       postOpenCommand: command,
       autoPromptClaude: autoPrompt,
       claudeStartupDelay: startupDelay,
+      confirmCloseOnDragToDone: confirmClose,
     }));
-    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt, claudeStartupDelay: startupDelay });
+    logConfig("debug", "Terminal settings loaded", { app, command, autoPromptClaude: autoPrompt, claudeStartupDelay: startupDelay, confirmCloseOnDragToDone: confirmClose });
   }, []);
 
-  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number): Promise<void> => {
-    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude, claudeStartupDelay });
+  const saveTerminalSettings = useCallback(async (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number, confirmCloseOnDragToDone: boolean): Promise<void> => {
+    logConfig("info", "Saving terminal settings", { app, command, autoPromptClaude, claudeStartupDelay, confirmCloseOnDragToDone });
 
     // Load current config content and update it
     const contentResult = await getConfigContent();
     if (!contentResult.ok) {
       // Create new config with terminal settings
       logConfig("debug", "Config file does not exist, creating new config");
-      const hasTerminalSettings = app || command || autoPromptClaude;
+      const hasTerminalSettings = app || command || autoPromptClaude || !confirmCloseOnDragToDone;
       const newContent = `github:
   repository: ""
 ${hasTerminalSettings ? `terminal:
-${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}` : ""}`;
+${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n` : ""}${autoPromptClaude ? `  autoPromptClaude: true\n` : ""}${autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY ? `  claudeStartupDelay: ${claudeStartupDelay}\n` : ""}${!confirmCloseOnDragToDone ? `  confirmCloseOnDragToDone: false\n` : ""}` : ""}`;
       await saveConfigContent(newContent);
     } else {
       // Parse and update existing config
@@ -185,7 +190,8 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
         const parsed = load(contentResult.value) as Record<string, unknown>;
 
         // Update terminal section
-        const hasTerminalSettings = app || command || autoPromptClaude;
+        // Only save confirmCloseOnDragToDone if it's false (non-default)
+        const hasTerminalSettings = app || command || autoPromptClaude || !confirmCloseOnDragToDone;
         if (hasTerminalSettings) {
           parsed.terminal = {
             ...(app && { app }),
@@ -193,6 +199,8 @@ ${app ? `  app: "${app}"\n` : ""}${command ? `  postOpenCommand: "${command}"\n`
             ...(autoPromptClaude && { autoPromptClaude }),
             // Only save delay if auto-prompt is enabled and it's not the default
             ...(autoPromptClaude && claudeStartupDelay !== DEFAULT_CLAUDE_STARTUP_DELAY && { claudeStartupDelay }),
+            // Only save confirmCloseOnDragToDone if it's false (non-default)
+            ...(!confirmCloseOnDragToDone && { confirmCloseOnDragToDone: false }),
           };
         } else {
           delete parsed.terminal;

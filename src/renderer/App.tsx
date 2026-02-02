@@ -6,6 +6,7 @@ import { AgentView } from './components/AgentView';
 import { DotBackground } from './components/DotBackground';
 import { DetailedCardView } from './components/DetailedCardView';
 import { CreateIssueDialog } from './components/CreateIssueDialog';
+import { ConfirmationDialog } from './components/ui/ConfirmationDialog';
 import { useCards } from './hooks/useCards';
 import { useDataSource } from './hooks/useDataSource';
 import { useViewToggle } from './hooks/useViewToggle';
@@ -19,8 +20,9 @@ import { NotificationProvider } from './context/NotificationContext';
 import { NotificationContainer } from './components/ui/NotificationContainer';
 import { NotificationPopover } from './components/ui/NotificationPopover';
 import { ErrorBoundary, CompactFallback } from './components/ErrorBoundary';
-import { getCachedConfig, clearConfigCache, loadConfig } from '@services/config';
-import { initLogger, shutdownLogger, logSystem, logUserAction } from '@services/logging';
+import { getCachedConfig, clearConfigCache, loadConfig, getConfirmCloseOnDragToDone } from '@services/config';
+import { closeIssue } from '@services/github';
+import { initLogger, shutdownLogger, logSystem, logUserAction, logDataSync } from '@services/logging';
 
 function ActionButton({
   onClick,
@@ -169,7 +171,7 @@ export default function App() {
   const { view, setView } = useViewToggle();
   const projectSelector = useProjectSelector();
   const { cards, setCards, isLoading, isRefreshing, error, errorCode, refresh } = useCards({ dataSource });
-  const { handleCardStatusChange } = useKanbanBoard({ cards, onCardsChange: setCards });
+  const { handleCardStatusChange, pendingClose, confirmPendingClose, cancelPendingClose } = useKanbanBoard({ cards, onCardsChange: setCards });
   const [repository, setRepository] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -177,6 +179,10 @@ export default function App() {
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [isCreateIssueOpen, setIsCreateIssueOpen] = useState(false);
   const hasInitialized = useRef(false);
+
+  // State for drag-to-done close operation
+  const [isClosingFromDrag, setIsClosingFromDrag] = useState(false);
+  const [confirmCloseOnDragSetting, setConfirmCloseOnDragSetting] = useState(true);
 
   const handleCardClick = useCallback((card: Card) => {
     setSelectedCard(card);
@@ -216,6 +222,47 @@ export default function App() {
     // Refresh to get the new issue from GitHub
     await refresh();
   }, [refresh]);
+
+  // Handler when user confirms drag-to-done close (or auto-confirm if setting disabled)
+  const handleConfirmDragToDone = useCallback(async () => {
+    if (!pendingClose || !repository) return;
+
+    setIsClosingFromDrag(true);
+    const result = await closeIssue(repository, pendingClose.card.github.issueNumber!, {
+      reason: 'completed',
+    });
+    setIsClosingFromDrag(false);
+
+    if (result.ok) {
+      // Remove card from board
+      setCards((prev) => prev.filter((c) => c.sessionUid !== pendingClose.card.sessionUid));
+      confirmPendingClose();
+      logUserAction('issue_closed', 'Issue closed via drag to Done', {
+        cardId: pendingClose.card.sessionUid,
+        issueNumber: pendingClose.card.github.issueNumber,
+      });
+    } else {
+      // Revert on failure
+      cancelPendingClose();
+      logDataSync('error', 'Failed to close issue via drag to Done', {
+        cardId: pendingClose.card.sessionUid,
+        issueNumber: pendingClose.card.github.issueNumber,
+        error: result.error.message,
+      });
+    }
+  }, [pendingClose, repository, confirmPendingClose, cancelPendingClose, setCards]);
+
+  // Load confirm close setting on mount and when settings change
+  useEffect(() => {
+    getConfirmCloseOnDragToDone().then(setConfirmCloseOnDragSetting);
+  }, []);
+
+  // Auto-close if setting is disabled (skip confirmation)
+  useEffect(() => {
+    if (pendingClose && !confirmCloseOnDragSetting && !isMock) {
+      handleConfirmDragToDone();
+    }
+  }, [pendingClose, confirmCloseOnDragSetting, isMock, handleConfirmDragToDone]);
 
   // Initialize project selector and load repository config
   useEffect(() => {
@@ -328,6 +375,8 @@ export default function App() {
 
   const handleConfigChange = async () => {
     clearConfigCache();
+    // Reload confirm close setting
+    getConfirmCloseOnDragToDone().then(setConfirmCloseOnDragSetting);
     if (!isMock) {
       setCards([]);  // Clear old cards before loading new project
       // Reload from global config (project service auto-saves on project switch)
@@ -444,6 +493,19 @@ export default function App() {
           onClose={() => setShowProjectSelector(false)}
           allowClose={projectSelector.hasProject}
         />
+        {/* Confirmation dialog for drag-to-done close */}
+        {pendingClose && confirmCloseOnDragSetting && !isMock && (
+          <ConfirmationDialog
+            isOpen={true}
+            onConfirm={handleConfirmDragToDone}
+            onCancel={cancelPendingClose}
+            title="Close Issue"
+            message={`Moving "${pendingClose.card.github.title}" to Done will close the issue on GitHub. Continue?`}
+            confirmLabel="Close Issue"
+            confirmVariant="destructive"
+            isLoading={isClosingFromDrag}
+          />
+        )}
       </NotificationProvider>
     </ErrorBoundary>
   );

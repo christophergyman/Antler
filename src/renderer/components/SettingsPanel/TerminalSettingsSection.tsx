@@ -13,7 +13,8 @@ interface TerminalSettingsSectionProps {
   postOpenCommand: string | null;
   autoPromptClaude: boolean | null;
   claudeStartupDelay: number | null;
-  onSave: (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number) => Promise<void>;
+  confirmCloseOnDragToDone: boolean | null;
+  onSave: (app: string, command: string, autoPromptClaude: boolean, claudeStartupDelay: number, confirmCloseOnDragToDone: boolean) => Promise<void>;
 }
 
 export function TerminalSettingsSection({
@@ -21,12 +22,14 @@ export function TerminalSettingsSection({
   postOpenCommand,
   autoPromptClaude: autoPromptClaudeProp,
   claudeStartupDelay: claudeStartupDelayProp,
+  confirmCloseOnDragToDone: confirmCloseOnDragToDoneProp,
   onSave,
 }: TerminalSettingsSectionProps) {
   const [app, setApp] = useState("");
   const [command, setCommand] = useState("");
   const [autoPromptClaude, setAutoPromptClaude] = useState(false);
   const [claudeStartupDelay, setClaudeStartupDelay] = useState(DEFAULT_CLAUDE_STARTUP_DELAY);
+  const [confirmCloseOnDragToDone, setConfirmCloseOnDragToDone] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -36,13 +39,15 @@ export function TerminalSettingsSection({
     setCommand(postOpenCommand ?? "");
     setAutoPromptClaude(autoPromptClaudeProp ?? false);
     setClaudeStartupDelay(claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
-  }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp]);
+    setConfirmCloseOnDragToDone(confirmCloseOnDragToDoneProp ?? true);
+  }, [terminalApp, postOpenCommand, autoPromptClaudeProp, claudeStartupDelayProp, confirmCloseOnDragToDoneProp]);
 
   const hasChanges =
     app !== (terminalApp ?? "") ||
     command !== (postOpenCommand ?? "") ||
     autoPromptClaude !== (autoPromptClaudeProp ?? false) ||
-    claudeStartupDelay !== (claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY);
+    claudeStartupDelay !== (claudeStartupDelayProp ?? DEFAULT_CLAUDE_STARTUP_DELAY) ||
+    confirmCloseOnDragToDone !== (confirmCloseOnDragToDoneProp ?? true);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -53,16 +58,18 @@ export function TerminalSettingsSection({
       hasCommand: Boolean(command),
       autoPromptClaude,
       claudeStartupDelay,
+      confirmCloseOnDragToDone,
     });
 
     try {
-      await onSave(app, command, autoPromptClaude, claudeStartupDelay);
+      await onSave(app, command, autoPromptClaude, claudeStartupDelay, confirmCloseOnDragToDone);
       setSaveSuccess(true);
       logUserAction("settings_save", "Terminal settings saved successfully", {
         app: app || "(default)",
         hasCommand: Boolean(command),
         autoPromptClaude,
         claudeStartupDelay,
+        confirmCloseOnDragToDone,
       });
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (e) {
@@ -188,6 +195,31 @@ export function TerminalSettingsSection({
           </p>
         </div>
       )}
+
+      {/* Confirm Close on Drag to Done Checkbox */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <input
+            id="confirm-close-on-drag"
+            type="checkbox"
+            checked={confirmCloseOnDragToDone}
+            onChange={(e) => {
+              setConfirmCloseOnDragToDone(e.target.checked);
+              setSaveSuccess(false);
+            }}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label
+            htmlFor="confirm-close-on-drag"
+            className="text-sm font-medium text-gray-700"
+          >
+            Confirm before closing issues
+          </label>
+        </div>
+        <p className="text-xs text-gray-500 ml-6">
+          Show confirmation dialog when dragging cards to Done column
+        </p>
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end">
