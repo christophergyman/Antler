@@ -24,6 +24,7 @@ export interface TerminalSettings {
   readonly postOpenCommand?: string; // e.g., "bun run dev"
   readonly autoPromptClaude?: boolean; // Auto-prompt Claude with issue context when opening terminal
   readonly claudeStartupDelay?: number; // Milliseconds to wait for Claude to initialize before pasting prompt
+  readonly confirmCloseOnDragToDone?: boolean; // Show confirmation dialog when dragging to Done (default true)
 }
 
 export interface AntlerConfig {
@@ -40,6 +41,7 @@ interface RawConfig {
     postOpenCommand?: unknown;
     autoPromptClaude?: unknown;
     claudeStartupDelay?: unknown;
+    confirmCloseOnDragToDone?: unknown;
   };
 }
 
@@ -65,7 +67,7 @@ function validateTerminalSettings(terminal: unknown): TerminalSettings | undefin
     return undefined;
   }
   const t = terminal as RawConfig["terminal"];
-  const result: { app?: string; postOpenCommand?: string; autoPromptClaude?: boolean; claudeStartupDelay?: number } = {};
+  const result: { app?: string; postOpenCommand?: string; autoPromptClaude?: boolean; claudeStartupDelay?: number; confirmCloseOnDragToDone?: boolean } = {};
 
   if (t?.app !== undefined && typeof t.app === "string" && t.app.trim()) {
     result.app = t.app.trim();
@@ -78,6 +80,9 @@ function validateTerminalSettings(terminal: unknown): TerminalSettings | undefin
   }
   if (t?.claudeStartupDelay !== undefined && typeof t.claudeStartupDelay === "number" && t.claudeStartupDelay >= 500 && t.claudeStartupDelay <= 10000) {
     result.claudeStartupDelay = t.claudeStartupDelay;
+  }
+  if (t?.confirmCloseOnDragToDone !== undefined && typeof t.confirmCloseOnDragToDone === "boolean") {
+    result.confirmCloseOnDragToDone = t.confirmCloseOnDragToDone;
   }
 
   return Object.keys(result).length > 0 ? Object.freeze(result) : undefined;
@@ -598,4 +603,20 @@ export async function getClaudeStartupDelay(): Promise<number> {
   const delay = result.value.terminal?.claudeStartupDelay ?? DEFAULT_CLAUDE_STARTUP_DELAY;
   logConfig("debug", "Retrieved Claude startup delay setting", { delay });
   return delay;
+}
+
+/**
+ * Get the confirm close on drag to Done setting
+ * When enabled, shows a confirmation dialog when dragging cards to the Done column
+ * Returns true (enabled) by default
+ */
+export async function getConfirmCloseOnDragToDone(): Promise<boolean> {
+  const result = await getCachedConfig();
+  if (!result.ok) {
+    logConfig("debug", "Failed to get confirm close on drag to Done - config unavailable");
+    return true;
+  }
+  const confirm = result.value.terminal?.confirmCloseOnDragToDone ?? true;
+  logConfig("debug", "Retrieved confirm close on drag to Done setting", { confirm });
+  return confirm;
 }

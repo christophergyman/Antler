@@ -3,7 +3,7 @@
  * Modal for creating new GitHub issues with template support
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -35,6 +35,9 @@ export function CreateIssueDialog({
   const [additionalMilestones, setAdditionalMilestones] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [createMore, setCreateMore] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch templates and repo metadata
   const { templates, isLoading: isLoadingTemplates } = useIssueTemplates(repo, isOpen);
@@ -56,10 +59,35 @@ export function CreateIssueDialog({
       setFormState(INITIAL_STATE);
       setSelectedTemplate(null);
       setSubmitError(null);
+      setSuccessMessage(null);
       setAdditionalMilestones([]);
       logUserAction("modal_open", "CreateIssueDialog opened", { repo });
     }
   }, [isOpen, repo]);
+
+  // Clear success message when user starts editing any field
+  useEffect(() => {
+    if (successMessage) {
+      const hasContent =
+        formState.title ||
+        formState.body ||
+        formState.labels.length > 0 ||
+        formState.assignees.length > 0 ||
+        formState.milestone;
+      if (hasContent) {
+        setSuccessMessage(null);
+      }
+    }
+  }, [formState, successMessage]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle Escape key
   useEffect(() => {
@@ -158,6 +186,7 @@ export function CreateIssueDialog({
         logUserAction("issue_created", "New issue created", {
           issueNumber: result.value.issueNumber,
           repo,
+          createMore,
         });
         logPerformance("Issue creation completed", elapsed, {
           issueNumber: result.value.issueNumber,
@@ -166,7 +195,22 @@ export function CreateIssueDialog({
         if (result.value.issueNumber) {
           onIssueCreated(result.value.issueNumber);
         }
-        onClose();
+
+        if (createMore) {
+          // Reset form but keep dialog open
+          setFormState(INITIAL_STATE);
+          setSelectedTemplate(null);
+          setAdditionalMilestones([]);
+          setSuccessMessage(`Issue #${result.value.issueNumber} created`);
+
+          // Auto-dismiss success message after 3 seconds
+          if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+          }
+          successTimeoutRef.current = setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          onClose();
+        }
       } else {
         logDataSync("error", "Failed to create issue", {
           repo,
@@ -187,7 +231,7 @@ export function CreateIssueDialog({
     } finally {
       setIsSubmitting(false);
     }
-  }, [formState, repo, onIssueCreated, onClose]);
+  }, [formState, repo, onIssueCreated, onClose, createMore]);
 
   const handleCancel = useCallback(() => {
     logUserAction("modal_close", "CreateIssueDialog cancelled", { repo });
@@ -319,7 +363,23 @@ export function CreateIssueDialog({
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <div>
+          <div className="flex items-center gap-4">
+            {/* Create more checkbox */}
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={createMore}
+                onChange={(e) => setCreateMore(e.target.checked)}
+                disabled={isSubmitting}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+              />
+              Create more
+            </label>
+
+            {/* Success/Error messages */}
+            {successMessage && (
+              <span className="text-sm text-green-600">{successMessage}</span>
+            )}
             {submitError && (
               <span className="text-sm text-red-600">{submitError}</span>
             )}

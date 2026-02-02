@@ -10,6 +10,7 @@ export interface DetailedCardViewProps {
   isOpen: boolean;
   onClose: () => void;
   onCardUpdate: (updatedCard: Card) => void;
+  onCardClose?: (cardId: string) => void;
 }
 
 export interface EditState {
