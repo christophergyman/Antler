@@ -8,12 +8,16 @@ interface AgentViewProps {
   cards: readonly Card[];
   selectedCardId: string | null;
   onCardSelect: (cardId: string) => void;
+  terminalCols: number;
+  terminalRows: number;
 }
 
 export const AgentView = memo(function AgentView({
   cards,
   selectedCardId,
   onCardSelect,
+  terminalCols,
+  terminalRows,
 }: AgentViewProps) {
   const selectedCard = selectedCardId
     ? cards.find((c) => c.sessionUid === selectedCardId) ?? null
@@ -33,7 +37,11 @@ export const AgentView = memo(function AgentView({
 
         {/* Terminal panel - 70% */}
         <div className="flex-1 min-w-0">
-          <TerminalPanel selectedCard={selectedCard} />
+          <TerminalPanel
+            selectedCard={selectedCard}
+            terminalCols={terminalCols}
+            terminalRows={terminalRows}
+          />
         </div>
       </div>
     </AgentSessionProvider>

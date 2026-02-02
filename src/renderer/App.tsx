@@ -19,7 +19,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { NotificationContainer } from './components/ui/NotificationContainer';
 import { NotificationPopover } from './components/ui/NotificationPopover';
 import { ErrorBoundary, CompactFallback } from './components/ErrorBoundary';
-import { getCachedConfig, clearConfigCache, loadConfig } from '@services/config';
+import { getCachedConfig, clearConfigCache, loadConfig, getTerminalCols, getTerminalRows, DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS } from '@services/config';
 import { initLogger, shutdownLogger, logSystem, logUserAction } from '@services/logging';
 
 function ActionButton({
@@ -176,6 +176,7 @@ export default function App() {
   const [selectedAgentCardId, setSelectedAgentCardId] = useState<string | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [isCreateIssueOpen, setIsCreateIssueOpen] = useState(false);
+  const [terminalDimensions, setTerminalDimensions] = useState({ cols: DEFAULT_TERMINAL_COLS, rows: DEFAULT_TERMINAL_ROWS });
   const hasInitialized = useRef(false);
 
   const handleCardClick = useCallback((card: Card) => {
@@ -252,6 +253,13 @@ export default function App() {
     };
   }, []);
 
+  // Load terminal dimensions from config
+  useEffect(() => {
+    Promise.all([getTerminalCols(), getTerminalRows()]).then(([cols, rows]) => {
+      setTerminalDimensions({ cols, rows });
+    });
+  }, []);
+
   const renderContent = () => {
     // Show loading while project selector is initializing
     if (projectSelector.isLoading || !hasInitialized.current) {
@@ -313,6 +321,8 @@ export default function App() {
               cards={cards}
               selectedCardId={selectedAgentCardId}
               onCardSelect={setSelectedAgentCardId}
+              terminalCols={terminalDimensions.cols}
+              terminalRows={terminalDimensions.rows}
             />
           </div>
         )}
@@ -322,6 +332,11 @@ export default function App() {
 
   const handleConfigChange = async () => {
     clearConfigCache();
+
+    // Reload terminal dimensions (applies even in mock mode)
+    const [cols, rows] = await Promise.all([getTerminalCols(), getTerminalRows()]);
+    setTerminalDimensions({ cols, rows });
+
     if (!isMock) {
       setCards([]);  // Clear old cards before loading new project
       // Reload from global config (project service auto-saves on project switch)

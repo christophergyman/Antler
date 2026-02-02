@@ -4,10 +4,14 @@ import { TerminalContainer } from "./TerminalContainer";
 
 interface TerminalPanelProps {
   selectedCard: Card | null;
+  terminalCols: number;
+  terminalRows: number;
 }
 
 export const TerminalPanel = memo(function TerminalPanel({
   selectedCard,
+  terminalCols,
+  terminalRows,
 }: TerminalPanelProps) {
   // Track cards that have been viewed (to keep their terminals alive)
   const [viewedCards, setViewedCards] = useState<Map<string, Card>>(new Map());
@@ -68,6 +72,8 @@ export const TerminalPanel = memo(function TerminalPanel({
           <TerminalContainer
             card={card}
             isVisible={card.sessionUid === selectedCard.sessionUid}
+            terminalCols={terminalCols}
+            terminalRows={terminalRows}
           />
         </div>
       ))}

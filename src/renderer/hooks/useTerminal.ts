@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
 import { WebLinksAddon } from "xterm-addon-web-links";
+import { Unicode11Addon } from "xterm-addon-unicode11";
 import type { PtyHandle, AgentStatus } from "@core/types";
 import { spawnPty } from "@services/pty";
 import { logWorktree } from "@services/logging";
+import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS } from "@services/config";
 
 // Import xterm CSS
 import "xterm/css/xterm.css";
@@ -13,33 +14,59 @@ interface UseTerminalOptions {
   worktreePath: string;
   port: number | null;
   autoStart?: boolean;
+  cols?: number;
+  rows?: number;
 }
 
 interface UseTerminalReturn {
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: React.RefObject<HTMLDivElement>;
+  terminalMountRef: React.RefObject<HTMLDivElement>;
   status: AgentStatus;
   error: string | null;
   startAgent: () => Promise<void>;
   stopAgent: () => Promise<void>;
+  scale: number;
 }
 
 export function useTerminal({
   worktreePath,
   port,
   autoStart = true,
+  cols = DEFAULT_TERMINAL_COLS,
+  rows = DEFAULT_TERMINAL_ROWS,
 }: UseTerminalOptions): UseTerminalReturn {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const terminalMountRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
   const ptyRef = useRef<PtyHandle | null>(null);
+  const terminalSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [status, setStatus] = useState<AgentStatus>("stopped");
   const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState<number>(1);
+
+  // Calculate scale to fit terminal within container
+  const calculateScale = useCallback(() => {
+    if (!containerRef.current || !terminalSizeRef.current) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const termSize = terminalSizeRef.current;
+
+    // Calculate scale factors for both dimensions
+    const scaleX = containerRect.width / termSize.width;
+    const scaleY = containerRect.height / termSize.height;
+
+    // Use the smaller scale to fit within container, but never scale up
+    const newScale = Math.min(scaleX, scaleY, 1.0);
+    setScale(newScale);
+  }, []);
 
   // Initialize xterm.js terminal
   useEffect(() => {
-    if (!containerRef.current || terminalRef.current) return;
+    if (!terminalMountRef.current || terminalRef.current) return;
 
     const terminal = new Terminal({
+      cols,
+      rows,
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"MesloLGS NF", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
@@ -68,43 +95,45 @@ export function useTerminal({
       },
     });
 
-    const fitAddon = new FitAddon();
+    // Load web links addon for clickable URLs
     const webLinksAddon = new WebLinksAddon();
-
-    terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
-    terminal.open(containerRef.current);
 
-    // Initial fit
-    fitAddon.fit();
+    // Load unicode11 addon for proper character width calculation
+    // This fixes rendering issues with modern Unicode symbols (spinners, box-drawing, etc.)
+    const unicode11Addon = new Unicode11Addon();
+    terminal.loadAddon(unicode11Addon);
+    terminal.unicode.activeVersion = "11";
+
+    terminal.open(terminalMountRef.current);
 
     terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
 
-    // Handle window resize
-    const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current) {
-        fitAddonRef.current.fit();
-        // Notify PTY of resize
-        if (ptyRef.current) {
-          const { cols, rows } = terminalRef.current;
-          ptyRef.current.resize(cols, rows).catch((err) => {
-            logWorktree("warn", "Failed to resize PTY", { error: String(err) });
-          });
-        }
+    // Get actual terminal dimensions after render
+    requestAnimationFrame(() => {
+      const screen = terminalMountRef.current?.querySelector('.xterm-screen');
+      if (screen) {
+        const rect = screen.getBoundingClientRect();
+        terminalSizeRef.current = { width: rect.width, height: rect.height };
+        calculateScale();
       }
-    };
+    });
 
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(containerRef.current);
+    // Observe container for resize to recalculate scale
+    const resizeObserver = new ResizeObserver(() => {
+      calculateScale();
+    });
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     return () => {
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
-      fitAddonRef.current = null;
     };
-  }, []);
+  }, [cols, rows, calculateScale]);
 
   // Start agent
   const startAgent = useCallback(async () => {
@@ -121,25 +150,20 @@ export function useTerminal({
     setStatus("starting");
     setError(null);
 
-    // Fit terminal to get accurate dimensions
-    if (fitAddonRef.current) {
-      fitAddonRef.current.fit();
-    }
-
     const terminal = terminalRef.current;
     const env: Record<string, string> = {};
     if (port !== null) {
       env.PORT = String(port);
     }
 
-    logWorktree("info", "Starting Claude agent", { worktreePath, port });
+    logWorktree("info", "Starting Claude agent", { worktreePath, port, cols, rows });
 
     const result = await spawnPty({
       cmd: "claude",
       args: [],
       cwd: worktreePath,
-      cols: terminal.cols,
-      rows: terminal.rows,
+      cols,
+      rows,
       env,
     });
 
@@ -181,7 +205,7 @@ export function useTerminal({
       disposeOnData.dispose();
       ptyRef.current = null;
     });
-  }, [worktreePath, port]);
+  }, [worktreePath, port, cols, rows]);
 
   // Stop agent
   const stopAgent = useCallback(async () => {
@@ -217,9 +241,11 @@ export function useTerminal({
 
   return {
     containerRef,
+    terminalMountRef,
     status,
     error,
     startAgent,
     stopAgent,
+    scale,
   };
 }
