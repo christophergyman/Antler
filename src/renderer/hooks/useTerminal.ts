@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "xterm";
 import { WebLinksAddon } from "xterm-addon-web-links";
+import { Unicode11Addon } from "xterm-addon-unicode11";
 import type { PtyHandle, AgentStatus } from "@core/types";
 import { spawnPty } from "@services/pty";
 import { logWorktree } from "@services/logging";
@@ -94,8 +95,16 @@ export function useTerminal({
       },
     });
 
+    // Load web links addon for clickable URLs
     const webLinksAddon = new WebLinksAddon();
     terminal.loadAddon(webLinksAddon);
+
+    // Load unicode11 addon for proper character width calculation
+    // This fixes rendering issues with modern Unicode symbols (spinners, box-drawing, etc.)
+    const unicode11Addon = new Unicode11Addon();
+    terminal.loadAddon(unicode11Addon);
+    terminal.unicode.activeVersion = "11";
+
     terminal.open(terminalMountRef.current);
 
     terminalRef.current = terminal;
