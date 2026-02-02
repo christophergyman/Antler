@@ -197,6 +197,12 @@ export default function App() {
     setSelectedCard(updatedCard);
   }, [setCards]);
 
+  const handleCardClose = useCallback((cardId: string) => {
+    setCards((prev) => prev.filter((card) => card.sessionUid !== cardId));
+    setSelectedCard(null);
+    logUserAction('card_closed', 'Card removed after issue closed', { cardId });
+  }, [setCards]);
+
   const handleCreateIssue = useCallback(() => {
     if (!repository) {
       logSystem('warn', 'Cannot create issue: no repository configured');
@@ -411,6 +417,7 @@ export default function App() {
             isOpen={selectedCard !== null}
             onClose={handleCloseDetailedView}
             onCardUpdate={handleCardUpdate}
+            onCardClose={!isMock ? handleCardClose : undefined}
           />
         </ErrorBoundary>
         <ErrorBoundary

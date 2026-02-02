@@ -560,6 +560,38 @@ export async function addIssueComment(
   return ok(undefined);
 }
 
+export interface CloseIssueOptions {
+  comment?: string;
+  reason?: "completed" | "not_planned";
+}
+
+/**
+ * Close an issue
+ * Uses gh issue close command
+ */
+export async function closeIssue(
+  repo: string,
+  issueNumber: number,
+  options: CloseIssueOptions = {}
+): Promise<GitHubResult<void>> {
+  const args = ["issue", "close", String(issueNumber), "--repo", repo];
+
+  if (options.comment) {
+    args.push("--comment", options.comment);
+  }
+  if (options.reason) {
+    args.push("--reason", options.reason);
+  }
+
+  logDataSync("info", "Closing issue", { repo, issueNumber });
+
+  const result = await execGh(args);
+  if (!result.ok) return result;
+
+  logDataSync("info", "Issue closed", { repo, issueNumber });
+  return ok(undefined);
+}
+
 // ============================================================================
 // Repository Metadata Fetching
 // ============================================================================

@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "../ui/button";
+import { ConfirmationDialog } from "../ui/ConfirmationDialog";
 import { DetailedCardViewHeader } from "./DetailedCardViewHeader";
 import { IssueInfoSection } from "./IssueInfoSection";
 import { MetadataSection } from "./MetadataSection";
@@ -18,6 +19,7 @@ import {
   updateIssue,
   addIssueComment,
   createMilestone,
+  closeIssue,
 } from "@services/github";
 import { logUserAction, logDataSync, logPerformance } from "@services/logging";
 import { useRepoMetadata } from "./hooks";
@@ -43,12 +45,16 @@ export function DetailedCardView({
   isOpen,
   onClose,
   onCardUpdate,
+  onCardClose,
 }: DetailedCardViewProps) {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [additionalMilestones, setAdditionalMilestones] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const wasOpenRef = useRef(false);
 
   // Compute repo string for metadata fetching
@@ -283,6 +289,53 @@ export function DetailedCardView({
     onClose();
   }, [onClose]);
 
+  const handleOpenCloseConfirm = useCallback(() => {
+    setIsCloseConfirmOpen(true);
+  }, []);
+
+  const handleCancelClose = useCallback(() => {
+    setIsCloseConfirmOpen(false);
+  }, []);
+
+  const handleConfirmClose = useCallback(async () => {
+    if (!card || !card.github.issueNumber || !onCardClose) return;
+
+    setIsClosing(true);
+    setCloseError(null);
+
+    const repoPath = `${card.github.repoOwner}/${card.github.repoName}`;
+
+    try {
+      const result = await closeIssue(repoPath, card.github.issueNumber, {
+        reason: "completed",
+      });
+
+      if (result.ok) {
+        logUserAction("issue_closed", "Issue closed via DetailedCardView", {
+          cardId: card.sessionUid,
+          issueNumber: card.github.issueNumber,
+        });
+        setIsCloseConfirmOpen(false);
+        onCardClose(card.sessionUid);
+      } else {
+        logDataSync("error", "Failed to close issue", {
+          issueNumber: card.github.issueNumber,
+          error: result.error.message,
+        });
+        setCloseError(result.error.message);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      logDataSync("error", "Exception while closing issue", {
+        issueNumber: card.github.issueNumber,
+        error: errorMessage,
+      });
+      setCloseError(errorMessage);
+    } finally {
+      setIsClosing(false);
+    }
+  }, [card, onCardClose]);
+
   if (!isOpen || !card) {
     return null;
   }
@@ -361,21 +414,41 @@ export function DetailedCardView({
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <div>
-            {saveError && (
-              <span className="text-sm text-red-600">{saveError}</span>
+          <div className="flex items-center gap-2">
+            {onCardClose && card.github.state === "open" && (
+              <Button
+                variant="destructive"
+                onClick={handleOpenCloseConfirm}
+                disabled={isSaving || isClosing}
+              >
+                Close Issue
+              </Button>
+            )}
+            {(saveError || closeError) && (
+              <span className="text-sm text-red-600">{saveError || closeError}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
+            <Button variant="outline" onClick={handleCancel} disabled={isSaving || isClosing}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!isDirty || isSaving}>
+            <Button onClick={handleSave} disabled={!isDirty || isSaving || isClosing}>
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
       </div>
+
+      <ConfirmationDialog
+        isOpen={isCloseConfirmOpen}
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
+        title="Close Issue"
+        message={`Are you sure you want to close "${card.github.title}"? This will mark the issue as completed on GitHub and remove it from the board.`}
+        confirmLabel="Close Issue"
+        confirmVariant="destructive"
+        isLoading={isClosing}
+      />
     </div>
   );
 }

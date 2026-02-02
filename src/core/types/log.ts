@@ -29,6 +29,7 @@ export type UserActionType =
   | "card_drag_end"
   | "card_opened"
   | "card_updated"
+  | "card_closed"
   | "comment_added"
   | "data_refresh"
   | "data_source_toggle"
@@ -49,6 +50,7 @@ export type UserActionType =
   | "open_terminal"
   | "settings_save"
   | "issue_created"
+  | "issue_closed"
   | "template_selected";
 
 // ============================================================================
